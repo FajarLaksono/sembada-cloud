@@ -1,0 +1,29 @@
+# Environment variables (secrets)
+.env
+sembada-cloud-research-key.json
+credentials.json
+credential.json
+credentials/*
+
+# Temporarily
+ClusterData2019_docs
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

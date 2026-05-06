@@ -1,0 +1,17 @@
+# Environment variables
+python-dotenv>=1.0.0
+
+# Google Cloud BigQuery
+google-cloud-bigquery>=3.25.0
+google-cloud-bigquery-storage>=2.21.0
+google-auth>=2.30.0
+
+# Data processing
+pandas>=2.2.0
+numpy>=2.0.0
+
+# Jupyter
+jupyter>=1.0.0
+ipykernel>=6.29.0
+
+db_dtypes

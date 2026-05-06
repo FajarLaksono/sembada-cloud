@@ -1,0 +1,35 @@
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "theme": "tokyonight",
+  "keybinds": {
+    "leader": "ctrl+x",
+    "app_exit": "ctrl+c,<leader>q",
+    "editor_open": "<leader>e",
+    "theme_list": "<leader>t",
+    "sidebar_toggle": "<leader>b",
+    "status_view": "<leader>s",
+    "session_new": "<leader>n",
+    "session_list": "<leader>l",
+    "session_rename": "ctrl+r",
+    "session_compact": "<leader>c",
+    "messages_undo": "<leader>u",
+    "messages_redo": "<leader>r",
+    "model_list": "<leader>m",
+    "agent_list": "<leader>a",
+    "agent_cycle": "tab",
+    "agent_cycle_reverse": "shift+tab",
+    "input_submit": "return",
+    "input_newline": "shift+return,ctrl+return,ctrl+j",
+    "history_previous": "up",
+    "history_next": "down",
+    "model_cycle_recent": "f2",
+    "variant_cycle": "ctrl+t",
+    "command_list": "ctrl+p"
+  },
+  "scroll_speed": 3,
+  "scroll_acceleration": {
+    "enabled": true
+  },
+  "diff_style": "auto",
+  "mouse": true
+}
