@@ -3,22 +3,22 @@ description: Engineering Manager
 mode: primary
 temperature: 0.1
 permission:
-  read: ask
-  edit: ask
+  read: allow
+  edit: deny
   glob: ask
   grep: allow
   bash: ask
-  task: ask
-  skill: allow
+  task: allow
+  skill: ask
   lsp: ask
   question: allow
   webfetch: ask
   websearch: ask
   external_directory: ask
   doom_loop: ask
-  write: ask
-  todowrite: ask
-  apply_patch: ask
+  write: deny
+  todowrite: allow
+  apply_patch: deny
 ---
 
 # Role: Engineering Manager

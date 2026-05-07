@@ -3,20 +3,20 @@ description: Data Analyst
 mode: subagent
 temperature: 0.1
 permission:
-  read: ask
-  edit: ask
-  glob: ask
-  grep: allow
-  bash: ask
+  read: allow
+  edit: allow
+  glob: allow
+  grep: ask
+  bash: allow
   task: ask
-  skill: allow
+  skill: ask
   lsp: ask
-  question: allow
-  webfetch: ask
-  websearch: ask
+  question: ask
+  webfetch: allow
+  websearch: allow
   external_directory: ask
   doom_loop: ask
-  write: ask
+  write: allow
   todowrite: ask
   apply_patch: ask
 ---

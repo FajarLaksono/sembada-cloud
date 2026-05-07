@@ -3,15 +3,15 @@ description: Code Reviewer
 mode: subagent
 temperature: 0.1
 permission:
-  read: ask
-  edit: ask
-  glob: ask
+  read: allow
+  edit: deny
+  glob: allow
   grep: allow
   bash: ask
   task: ask
-  skill: allow
-  lsp: ask
-  question: allow
+  skill: ask
+  lsp: allow
+  question: ask
   webfetch: ask
   websearch: ask
   external_directory: ask

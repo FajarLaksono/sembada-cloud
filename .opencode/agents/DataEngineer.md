@@ -3,21 +3,21 @@ description: Data Engineer
 mode: subagent
 temperature: 0.1
 permission:
-  read: ask
-  edit: ask
-  glob: ask
-  grep: allow
-  bash: ask
+  read: allow
+  edit: allow
+  glob: allow
+  grep: ask
+  bash: allow
   task: ask
-  skill: allow
+  skill: ask
   lsp: ask
-  question: allow
+  question: ask
   webfetch: ask
   websearch: ask
   external_directory: ask
   doom_loop: ask
-  write: ask
-  todowrite: ask
+  write: allow
+  todowrite: allow
   apply_patch: ask
 ---
 

@@ -3,22 +3,22 @@ description: Software Engineer
 mode: subagent
 temperature: 0.1
 permission:
-  read: ask
-  edit: ask
-  glob: ask
+  read: allow
+  edit: allow
+  glob: allow
   grep: allow
-  bash: ask
+  bash: allow
   task: ask
-  skill: allow
-  lsp: ask
-  question: allow
+  skill: ask
+  lsp: allow
+  question: ask
   webfetch: ask
   websearch: ask
   external_directory: ask
   doom_loop: ask
-  write: ask
-  todowrite: ask
-  apply_patch: ask
+  write: allow
+  todowrite: allow
+  apply_patch: allow
 ---
 
 # Role: Software Engineer
