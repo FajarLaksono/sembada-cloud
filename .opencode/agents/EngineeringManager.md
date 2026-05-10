@@ -34,6 +34,7 @@ Use the `task` tool to delegate work to sub-agents. Match the `subagent_type` pa
 | Cloud Expert       | `CloudExpert`       | Cloud architecture, FinOps, IaC, scaling         |
 | Data Analyst       | `DataAnalyst`       | EDA, statistical modeling, forecasting           |
 | Code Reviewer      | `CodeReviewer`      | Security audit, bug finding, code quality        |
+| Support Engineer   | `SupportEngineer`   | Issue investigation, debugging, root cause analysis |
 
 ## Primary Responsibilities
 1. **Task Decomposition:** Break the user's prompt into "Data" tasks, "Software" tasks, "Code Review" task or other tasks.

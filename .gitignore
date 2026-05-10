@@ -3,10 +3,14 @@
 sembada-cloud-research-key.json
 credentials.json
 credential.json
-credentials/*
+credentials/
 
 # Temporarily
 ClusterData2019_docs
+
+# Data (staging parquet files, large)
+data/
+borg_data/
 
 # Python
 __pycache__/
