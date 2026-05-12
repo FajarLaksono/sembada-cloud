@@ -99,12 +99,17 @@ sembada-cloud/
 
 ```
 data/transformed/parquet/
-  ├── vmtable.parquet          ──► DuckDB ──► pandas ──► feature engineering ──► train/test split ──► models
-  ├── subscriptions.parquet         │
-  ├── deployments.parquet          │
-  ├── azure_pricing.parquet        │
-  └── cpu_readings/*.parquet       │
-                                    └──► Timeseries: sliding windows ──► LSTM/GRU ──► models
+  ├── vmtable.parquet          ──► DuckDB ──► pandas ──────────────────────────────────┐
+  ├── subscriptions.parquet    ──► DuckDB ──► pandas merge on subscription_id ─────────┤
+  ├── deployments.parquet      ──► DuckDB ──► pandas merge on deployment_id ───────────┤
+  ├── azure_pricing.parquet    ──► DuckDB ──► dict lookup (core_bucket, mem_bucket) ───┤
+  └── cpu_readings/*.parquet   ──► pandas concat ──► multi-VM sequences ──► LSTM/GRU    │
+                                                                                        ▼
+                                                                          feature engineering
+                                                                                │
+                                                                          train/test split
+                                                                                │
+                                                                          tabular models
 ```
 
 ### 2.2 Import Convention
@@ -248,7 +253,6 @@ from imblearn.over_sampling import SMOTE
 
 ```python
 DATA_DIR = pathlib.Path("data/transformed/parquet")
-PRICING_PATH = DATA_DIR / "azure_pricing.parquet"
 
 con = duckdb.connect(":memory:")
 
@@ -259,15 +263,40 @@ for tbl in ["vmtable", "subscriptions", "deployments", "pricing"]:
         con.execute(f"CREATE VIEW {tbl} AS SELECT * FROM read_parquet('{path}')")
         print(f"  ✓ {tbl}: {con.execute(f'SELECT COUNT(*) FROM {tbl}').fetchone()[0]:,} rows")
 
-# Load pricing
-if PRICING_PATH.exists():
-    pricing_df = con.execute("SELECT * FROM pricing").fetchdf()
-else:
-    pricing_df = None
-
-# Load main table
+# Load main vmtable
 vmtable = con.execute("SELECT * FROM vmtable").fetchdf()
 print(f"✓ vmtable loaded: {len(vmtable):,} rows, {len(vmtable.columns)} columns")
+
+# Load pricing for rate_per_hour lookup
+pricing_df = None
+if (DATA_DIR / "azure_pricing.parquet").exists():
+    pricing_df = con.execute("SELECT * FROM pricing").fetchdf()
+    print(f"✓ pricing_df loaded: {len(pricing_df):,} rows")
+
+# Load subscriptions for subscription-level features
+subscriptions_df = None
+if (DATA_DIR / "subscriptions.parquet").exists():
+    subscriptions_df = con.execute("SELECT * FROM subscriptions").fetchdf()
+    print(f"✓ subscriptions_df loaded: {len(subscriptions_df):,} rows")
+
+# Load deployments for deployment-level features
+deployments_df = None
+if (DATA_DIR / "deployments.parquet").exists():
+    deployments_df = con.execute("SELECT * FROM deployments").fetchdf()
+    print(f"✓ deployments_df loaded: {len(deployments_df):,} rows")
+
+# Load all CPU readings shards (dynamic discovery)
+cpu_df = None
+cpu_shards = sorted(DATA_DIR.glob("cpu_readings/*.parquet"))
+if cpu_shards:
+    all_readings = []
+    for shard in cpu_shards:
+        all_readings.append(pd.read_parquet(shard))
+    cpu_df = pd.concat(all_readings, ignore_index=True)
+    print(f"✓ cpu_df loaded: {len(cpu_df):,} rows from {len(cpu_shards)} shards, "
+          f"{cpu_df['vm_id'].nunique()} unique VMs")
+else:
+    print("  ⚠ No CPU reading shards found")
 ```
 
 ---
@@ -291,24 +320,36 @@ print(f"✓ vmtable loaded: {len(vmtable):,} rows, {len(vmtable.columns)} column
 #### 3.2. Feature Construction
 
 ```python
-def create_features(df: pd.DataFrame) -> pd.DataFrame:
+def create_features(
+    df: pd.DataFrame,
+    pricing_df: pd.DataFrame | None = None,
+    subscriptions_df: pd.DataFrame | None = None,
+    deployments_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
 ```
 
-| Feature | Type | Derivation |
-|---|---|---|
-| `core_count` | numeric | Parse `vm_core_count_bucket`: 2→2, 4→4, 8→8, 24→24, >24→48 |
-| `memory_gb` | numeric | Parse `vm_memory_gb_bucket`: 2→2, 4→4, 8→8, 32→32, 64→64, >64→128 |
-| `lifetime_hours` | numeric | `(timestamp_deleted - timestamp_created) / 3600` |
-| `creation_hour` | cyclic (sin/cos) | `hour = timestamp_to_hour(timestamp_created)`; `sin = sin(2πh/24)`, `cos = cos(2πh/24)` |
-| `creation_dayofweek` | cyclic (sin/cos) | Same cyclical encoding for day of week |
-| `cpu_per_core` | ratio | `avg_cpu / core_count` |
-| `memory_per_core` | ratio | `memory_gb / core_count` |
-| `burstiness` | ratio | `p95_max_cpu / (avg_cpu + 1e-6)` |
-| `max_to_avg_ratio` | ratio | `max_cpu / (avg_cpu + 1e-6)` |
-| `is_short_lived` | binary | `lifetime_hours < 1` |
-| `vm_category_*` | one-hot | `pd.get_dummies(df['vm_category'], prefix='cat')` |
-| `core_bucket_*` | one-hot | `pd.get_dummies(df['vm_core_count_bucket'], prefix='core')` |
-| `mem_bucket_*` | one-hot | `pd.get_dummies(df['vm_memory_gb_bucket'], prefix='mem')` |
+| Feature | Type | Derivation | Source Table |
+|---------|------|-----------|--------------|
+| `core_count` | numeric | Parse `vm_core_count_bucket`: 2→2, 4→4, 8→8, 24→24, >24→48 | `vmtable` |
+| `memory_gb` | numeric | Parse `vm_memory_gb_bucket`: 2→2, 4→4, 8→8, 32→32, 64→64, >64→128 | `vmtable` |
+| `lifetime_hours` | numeric | `(timestamp_deleted - timestamp_created) / 3600` | `vmtable` |
+| `creation_hour` | cyclic (sin/cos) | `hour = timestamp_to_hour(timestamp_created)`; `sin = sin(2πh/24)`, `cos = cos(2πh/24)` | `vmtable` |
+| `creation_dayofweek` | cyclic (sin/cos) | Same cyclical encoding for day of week | `vmtable` |
+| `cpu_per_core` | ratio | `avg_cpu / core_count` | `vmtable` |
+| `memory_per_core` | ratio | `memory_gb / core_count` | `vmtable` |
+| `burstiness` | ratio | `p95_max_cpu / (avg_cpu + 1e-6)` | `vmtable` |
+| `max_to_avg_ratio` | ratio | `max_cpu / (avg_cpu + 1e-6)` | `vmtable` |
+| `is_short_lived` | binary | `lifetime_hours < 1` | `vmtable` |
+| `vm_category_*` | one-hot | `pd.get_dummies(df['vm_category'], prefix='cat')` | `vmtable` |
+| `core_bucket_*` | one-hot | `pd.get_dummies(df['vm_core_count_bucket'], prefix='core')` | `vmtable` |
+| `mem_bucket_*` | one-hot | `pd.get_dummies(df['vm_memory_gb_bucket'], prefix='mem')` | `vmtable` |
+| `rate_per_hour` | numeric | Dict lookup: `pricing_df[(core_bucket, mem_bucket)] → rate_per_hour` | `azure_pricing` |
+| `vm_cost` | numeric | `rate_per_hour × lifetime_hours` | computed |
+| `waste_cost` | numeric | `vm_cost × waste_fraction` | computed |
+| `sub_vm_count` | numeric | `subscriptions_df['vm_count']` joined on `subscription_id` | `subscriptions` |
+| `sub_first_vm_ts` | numeric | `subscriptions_df['first_vm_timestamp']` joined on `subscription_id` | `subscriptions` |
+| `sub_tenure` | numeric | `timestamp_created - sub_first_vm_ts` (age of subscription when VM created) | computed |
+| `deployment_size` | numeric | `deployments_df['deployment_size']` joined on `deployment_id` | `deployments` |
 
 #### 3.3. Feature-Target Correlation & Mutual Information
 
@@ -573,17 +614,37 @@ anomalies = anomaly.predict(X_cost_features)
 **Business Question:** Can deep learning models predict future CPU utilization from historical timeseries?
 
 **Approach:**
-- Select a single VM from `cpu_readings/*.parquet` with ≥24h of continuous data
+- Load **all** available shards from `cpu_readings/*.parquet`
+- Concatenate into a single DataFrame
+- Discover VMs with longest continuous traces (≥24h of data)
+- Select up to 5 VMs with the longest traces for modeling
 - Load and sort chronologically by `timestamp`
 
 ```python
-cpu_shards = sorted(DATA_DIR.glob("cpu_readings/*.parquet"))
-sample = pd.read_parquet(cpu_shards[0])
-vm_id = sample['vm_id'].value_counts().index[0]
-vm_series = sample[sample['vm_id'] == vm_id].sort_values('timestamp')
+from app.src.features import load_cpu_readings, create_sequences
+
+cpu_df = load_cpu_readings(DATA_DIR)
+print(f"Loaded {len(cpu_df):,} readings across {cpu_df['vm_id'].nunique()} VMs")
+
+# Select VMs with longest continuous traces
+vm_stats = cpu_df.groupby('vm_id').agg(
+    count=('timestamp', 'nunique'),
+    min_ts=('timestamp', 'min'),
+    max_ts=('timestamp', 'max')
+)
+vm_stats['duration_hours'] = (vm_stats['max_ts'] - vm_stats['min_ts']) / 3600
+top_vms = vm_stats.nlargest(5, 'duration_hours')
+
+# Build a dict of VM ID → sorted timeseries
+vm_series = {}
+for vm_id in top_vms.index:
+    series = cpu_df[cpu_df['vm_id'] == vm_id].sort_values('timestamp')
+    vm_series[vm_id] = series['avg_cpu'].values
 ```
 
-#### 8.2. Data Preparation
+#### 8.2. Data Preparation (per VM)
+
+For each selected VM:
 
 - Create sliding windows: lookback = 24 steps (2 hours at 5-min intervals)
 - Train/val/test split: 70/15/15 chronological
@@ -592,7 +653,15 @@ vm_series = sample[sample['vm_id'] == vm_id].sort_values('timestamp')
 
 ```python
 from app.src.features import create_sequences
-X_seq, y_seq = create_sequences(vm_series['avg_cpu'].values, lookback=24)
+
+all_sequences = {}  # vm_id → {X_train, X_val, X_test, y_train, y_val, y_test, scaler}
+for vm_id, values in vm_series.items():
+    X_seq, y_seq = create_sequences(values, lookback=24)
+    n = len(X_seq)
+    X_train, y_train = X_seq[:int(n*0.7)], y_seq[:int(n*0.7)]
+    X_val, y_val = X_seq[int(n*0.7):int(n*0.85)], y_seq[int(n*0.7):int(n*0.85)]
+    X_test, y_test = X_seq[int(n*0.85):], y_seq[int(n*0.85):]
+    all_sequences[vm_id] = (X_train, y_train, X_val, y_val, X_test, y_test)
 ```
 
 #### 8.3. ARIMA Baseline
@@ -614,7 +683,8 @@ Input(shape=(24, 1))
   → Dense(1)
 ```
 
-**Training:** Adam(learning_rate=0.001), MSE loss, EarlyStopping(patience=10), 100 epochs
+**Training (per VM):** Adam(learning_rate=0.001), MSE loss, EarlyStopping(patience=10), 100 epochs
+**Aggregation:** Metrics averaged across all modeled VMs.
 
 ```python
 model = Sequential([
@@ -659,16 +729,20 @@ Input(shape=(24, 1))
 
 #### 8.8. Model Comparison & Save
 
-| Model | MAE | RMSE | Training Time | Parameters |
+Results are aggregated across all VMs: mean ± std per architecture.
+
+| Model | MAE (mean ± std) | RMSE (mean ± std) | Avg Training Time | Avg Parameters |
 |---|---|---|---|---|
 | ARIMA | | | | |
 | LSTM | | | | |
-| GRU | | | | |
 | BiGRU | | | | |
 | CNN-LSTM | | | | |
 
+**VM coverage:** Trained on top-5 VMs from all available cpu_readings shards.
+
 ```python
-best_model.save("models/timeseries/lstm_cpu.keras")
+import tensorflow as tf
+best_model.save("models/timeseries/bigru_cpu.keras")
 ```
 
 ---
@@ -784,24 +858,22 @@ shap.dependence_plot("core_count", shap_values, X_test_sample)
 #### 11.3. Limitations
 
 | Limitation | Impact | Mitigation |
-|---|---|---|
+|---|---|---|---|
 | Data from 2019 | Model may not reflect current usage patterns | Retrain on newer data when available |
-| CPU readings: 25/195 shards | Timeseries models trained on limited data | Proof-of-concept only; scale with full data |
 | No memory utilization | Waste analysis incomplete | Add when data available |
-| Pricing approximations | Cost predictions have inherent error | Document margin of error |
 | Single trace (30 days) | May not capture seasonal patterns | Extend to multi-month data |
 
 #### 11.4. Future Work
 
 | Future Work | Literature Basis | Priority |
-|---|---|---|
+|---|---|---|---|
 | Temporal Fusion Transformer for multi-horizon forecasting | TFT (Lim et al.) | Medium |
 | Deep Reinforcement Learning for auto-scaling | RLPRAF, Q-Learning | Low |
 | Federated Learning for multi-cloud privacy | Federated RL | Low |
-| WHA preprocessing for anomaly detection | Weighted Hybrid Algorithm | Medium |
 | CPU histogram percentile features (11 + 9 bins) | Google ClusterData (v3) | High |
 | Multi-cell/region training for generalization | — | Medium |
 | CI/CD pipeline for automated retraining | CAMS DevOps | Low |
+| Real-time pricing API for current rates | — | Low |
 
 ---
 
@@ -814,7 +886,12 @@ shap.dependence_plot("core_count", shap_values, X_test_sample)
 **Functions:**
 
 ```python
-def create_features(df: pd.DataFrame, pricing_df: pd.DataFrame | None = None) -> pd.DataFrame:
+def create_features(
+    df: pd.DataFrame,
+    pricing_df: pd.DataFrame | None = None,
+    subscriptions_df: pd.DataFrame | None = None,
+    deployments_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     """
     Complete feature engineering pipeline.
 
@@ -829,8 +906,11 @@ def create_features(df: pd.DataFrame, pricing_df: pd.DataFrame | None = None) ->
         4. Create ratio features (cpu_per_core, memory_per_core, burstiness, max_to_avg_ratio)
         5. Create binary flags (is_short_lived)
         6. One-hot encode vm_category, vm_core_count_bucket, vm_memory_gb_bucket
-        7. Create target columns: is_idle, waste_tier
-        8. Calculate vm_cost if pricing_df provided (else skip)
+        7. Compute rate_per_hour via pricing lookup (if pricing_df provided)
+        8. Compute vm_cost and waste_cost from rate_per_hour
+        9. Join subscription-level features (if subscriptions_df provided)
+        10. Join deployment-level features (if deployments_df provided)
+        11. Create target columns: is_idle, waste_tier, waste_fraction
 
     Returns: DataFrame with all engineered features + original vm_id for indexing
     """
@@ -850,6 +930,23 @@ def get_feature_target_columns(
 
     Returns:
         (list of feature column names, target column name)
+    """
+
+
+def load_cpu_readings(data_dir: str | Path) -> pd.DataFrame:
+    """
+    Load all CPU readings shards from disk.
+
+    Discovers all parquet files in cpu_readings/ subdirectory,
+    concatenates them into a single DataFrame.
+
+    Parameters:
+        data_dir: Path to parquet data directory (e.g., "data/transformed/parquet")
+
+    Returns:
+        pd.DataFrame with columns:
+            vm_id, timestamp, avg_cpu, max_cpu, p95_max_cpu
+        Returns empty DataFrame if no shards found.
     """
 
 
@@ -1006,10 +1103,34 @@ def vmtable_sample() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def engineered_features(vmtable_sample) -> pd.DataFrame:
-    """Create features from sample data for testing."""
+def pricing_sample() -> pd.DataFrame | None:
+    """Load pricing data for testing. Returns None if file missing."""
+    path = DATA_DIR / "azure_pricing.parquet"
+    return pd.read_parquet(path) if path.exists() else None
+
+
+@pytest.fixture(scope="session")
+def subscriptions_sample() -> pd.DataFrame | None:
+    """Load subscriptions data for testing."""
+    path = DATA_DIR / "subscriptions.parquet"
+    return pd.read_parquet(path) if path.exists() else None
+
+
+@pytest.fixture(scope="session")
+def deployments_sample() -> pd.DataFrame | None:
+    """Load deployments data for testing."""
+    path = DATA_DIR / "deployments.parquet"
+    return pd.read_parquet(path) if path.exists() else None
+
+
+@pytest.fixture(scope="session")
+def engineered_features(vmtable_sample, pricing_sample,
+                         subscriptions_sample,
+                         deployments_sample) -> pd.DataFrame:
+    """Create features from sample + auxiliary data for testing."""
     from app.src.features import create_features
-    return create_features(vmtable_sample)
+    return create_features(vmtable_sample, pricing_sample,
+                           subscriptions_sample, deployments_sample)
 
 
 @pytest.fixture(scope="session")
@@ -1021,7 +1142,7 @@ def sequence_data() -> tuple[np.ndarray, np.ndarray]:
     return create_sequences(data, lookback=24)
 ```
 
-### 6.2. `test_features.py` — 5 Tests
+### 6.2. `test_features.py` — 8 Tests
 
 ```python
 import pandas as pd
@@ -1088,6 +1209,37 @@ class TestCreateFeatures:
         assert X_seq.shape[1] == 24  # lookback
         assert y_seq.ndim == 1
         assert len(X_seq) == len(y_seq)
+
+
+class TestMultiTableFeatures:
+    """Tests for multi-table feature augmentation."""
+
+    def test_pricing_lookup(self, vmtable_sample, pricing_sample):
+        """Rate per hour is assigned correctly from pricing lookup."""
+        from app.src.features import create_features
+
+        result = create_features(vmtable_sample, pricing_df=pricing_sample)
+        assert 'rate_per_hour' in result.columns
+        assert result['rate_per_hour'].min() >= 0
+        assert result['vm_cost'].notna().any()
+        assert result['vm_cost'].min() >= 0
+
+    def test_subscription_features(self, vmtable_sample, subscriptions_sample):
+        """Subscription-level features are present and joined."""
+        from app.src.features import create_features
+
+        result = create_features(vmtable_sample, subscriptions_df=subscriptions_sample)
+        assert 'sub_vm_count' in result.columns
+        assert result['sub_vm_count'].notna().all()
+        assert result['sub_vm_count'].dtype in [int, 'int64', 'int32']
+
+    def test_deployment_features(self, vmtable_sample, deployments_sample):
+        """Deployment-level features are present and joined."""
+        from app.src.features import create_features
+
+        result = create_features(vmtable_sample, deployments_df=deployments_sample)
+        assert 'deployment_size' in result.columns
+        assert result['deployment_size'].notna().all()
 ```
 
 ### 6.3. `test_model.py` — 4 Tests
