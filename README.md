@@ -1,5 +1,5 @@
 # sembada-cloud
-
+Use Python 3.13.13
 
 ### What is CRISP-ML(Q)
 CRISP-ML(Q) stands for Cross-Industry Standard Process for Machine Learning with Quality Assurance methodology. It is a structured, iterative framework designed to guide the entire ML lifecycle, from business understanding to deployment and maintenance, while emphasizing risk management, model quality, and reliability.

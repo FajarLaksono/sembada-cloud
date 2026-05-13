@@ -10,7 +10,16 @@ ClusterData2019_docs
 
 # Data (staging parquet files, large)
 data/
-borg_data/
+
+# Models (large binary files)
+models/**/*.pkl
+models/**/*.keras
+models/**/*.h5
+!models/.gitkeep
+models/*.csv
+
+# log files
+catboost_info/
 
 # Python
 __pycache__/
@@ -31,3 +40,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# QA
+.pytest_cache/

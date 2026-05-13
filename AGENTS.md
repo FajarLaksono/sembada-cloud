@@ -6,7 +6,7 @@ This is a business analytics project to analyze and predict cloud resources and 
 
 ## Datasets:
 
-- Google Borg cluster traces datasets: https://github.com/google/cluster-data 
+- Azure Public Dataset V2 (2019 VM traces): https://github.com/Azure/AzurePublicDataset/blob/master/AzurePublicDatasetV2.md 
 
 ## Tech stack
 
@@ -47,3 +47,20 @@ This is a business analytics project to analyze and predict cloud resources and 
 2. Make minimal, focused changes
 3. Ensure tests pass
 4. Explain what you changed and why
+
+## Development Commands
+
+### Testing
+- Run all unit tests: `pytest app/tests/ -v`
+- Run specific test file: `pytest app/tests/test_features.py -v`
+- Run with coverage: `pytest app/tests/ --cov=app.src`
+
+### Linting & Formatting
+- Check PEP 8 compliance: `flake8 app/src/ --max-line-length=120`
+- Format code: `black app/src/ app/tests/`
+
+### Notebook Execution
+- Execute notebook end-to-end: `jupyter nbconvert --to notebook --execute notebooks/03_predictive_analysis.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+
+### CI/CD
+- Run full CI locally: `pytest app/tests/ -v && jupyter nbconvert --to notebook --execute notebooks/03_predictive_analysis.ipynb`

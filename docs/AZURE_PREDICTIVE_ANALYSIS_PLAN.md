@@ -1,4 +1,4 @@
-# Azure Predictive Analysis Plan — 03_predictive_analysis.ipynb
+# Azure Predictive Analysis Plan — 03a/03b/03c
 
 **Dataset:** Azure Public Dataset V2 (2019 VM traces)
 **Dataset Source:** https://github.com/Azure/AzurePublicDataset/blob/master/AzurePublicDatasetV2.md
@@ -13,7 +13,7 @@
 1. [Executive Summary](#1-executive-summary)
 2. [Architecture Overview](#2-architecture-overview)
 3. [CRISP-ML(Q) & CAMS DevOps Integration](#3-crisp-mlq--cams-devops-integration)
-4. [Notebook Structure: 03_predictive_analysis.ipynb](#4-notebook-structure-03_predictive_analysisipynb)
+4. [Notebook Structure: 3-Notebook Split](#4-notebook-structure-3-notebook-split)
 5. [Thin Import Modules: app/src/](#5-thin-import-modules-appsrc)
 6. [Testing: app/tests/](#6-testing-apptests)
 7. [CI/CD: GitHub Actions](#7-cicd-github-actions)
@@ -28,7 +28,7 @@
 
 ### 1.1 Purpose
 
-This document defines the complete plan for building `03_predictive_analysis.ipynb` — the predictive modeling phase of the Sembada Cloud project. The notebook performs ML-based prediction of cloud resource utilization, waste detection, cost anomaly identification, and workload segmentation on the Azure Public Dataset V2.
+This document defines the complete plan for building the predictive modeling phase of the Sembada Cloud project — split across three focused notebooks (`03a_feature_engineering.ipynb`, `03b_tabular_models.ipynb`, `03c_timeseries_forecasting.ipynb`). Together they perform ML-based prediction of cloud resource utilization, waste detection, cost anomaly identification, and workload segmentation on the Azure Public Dataset V2.
 
 ### 1.2 Methodology
 
@@ -45,7 +45,7 @@ Models selected based on literature review (see `docs/Recommended_models_from_li
 
 | Category | Literature Recommendation | Implementation |
 |---|---|---|
-| Tabular regression/classification | XGBoost, CatBoost, Random Forest | §4–5 |
+| Tabular regression/classification | XGBoost, Random Forest | §4–5 |
 | Time series forecasting | LSTM, BiGRU, CNN-LSTM, TFT | §8 |
 | Workload segmentation | K-Means | §6 |
 | Anomaly detection | Isolation Forest, WHA | §7 |
@@ -55,6 +55,8 @@ Models selected based on literature review (see `docs/Recommended_models_from_li
 
 **Notebook-first, thin-imports pattern.** The notebook is the primary academic deliverable. It imports reusable logic from `app/src/` modules (features.py, models.py, visualize.py) rather than duplicating code. This avoids dual-maintenance while keeping logic testable.
 
+To manage memory, iteration speed, and debuggability, the work is split into three notebooks that share a common feature artifact (`features_df.parquet`).
+
 ---
 
 ## 2. Architecture Overview
@@ -62,18 +64,20 @@ Models selected based on literature review (see `docs/Recommended_models_from_li
 ```
 sembada-cloud/
 ├── notebooks/
-│   └── 03_predictive_analysis.ipynb          ← Primary deliverable. CRISP-ML(Q) narrative + experiments
+│   ├── 03a_feature_engineering.ipynb         ← §1–§3: Load all tables, build features, save artifact
+│   ├── 03b_tabular_models.ipynb              ← §4–§7, §9–§11: Train/evaluate tabular models, SHAP
+│   └── 03c_timeseries_forecasting.ipynb      ← §8 only: Load CPU readings (DuckDB), train LSTM/GRU
 │
 ├── app/src/
 │   ├── __init__.py                           ← Package marker (existing, unmodified)
-│   ├── features.py                           ← Feature engineering functions (~80 lines)
-│   ├── models.py                             ← Model wrappers (fit, predict, save) (~120 lines)
-│   └── visualize.py                          ← Publication-quality figure functions (~60 lines)
+│   ├── features.py                           ← Feature engineering functions (~350 lines)
+│   ├── models.py                             ← Model wrappers (fit, predict, save) (~390 lines)
+│   └── visualize.py                          ← Publication-quality figure functions (~200 lines)
 │
 ├── app/tests/
 │   ├── __init__.py
-│   ├── conftest.py                           ← Shared fixtures (sample data)
-│   ├── test_features.py                      ← 5 tests: shape, parsing, encodings, targets, sequences
+│   ├── conftest.py                           ← Shared fixtures (sample data, 8 fixtures)
+│   ├── test_features.py                      ← 15 tests: shape, parsing, encodings, targets, sequences, multi-table
 │   └── test_model.py                         ← 4 tests: fit/predict, evaluate, cluster, save/load
 │
 ├── models/
@@ -98,18 +102,40 @@ sembada-cloud/
 ### 2.1 Data Flow
 
 ```
-data/transformed/parquet/
-  ├── vmtable.parquet          ──► DuckDB ──► pandas ──────────────────────────────────┐
-  ├── subscriptions.parquet    ──► DuckDB ──► pandas merge on subscription_id ─────────┤
-  ├── deployments.parquet      ──► DuckDB ──► pandas merge on deployment_id ───────────┤
-  ├── azure_pricing.parquet    ──► DuckDB ──► dict lookup (core_bucket, mem_bucket) ───┤
-  └── cpu_readings/*.parquet   ──► pandas concat ──► multi-VM sequences ──► LSTM/GRU    │
-                                                                                        ▼
-                                                                          feature engineering
-                                                                                │
-                                                                          train/test split
-                                                                                │
-                                                                          tabular models
+                               ┌──────────────────────────────────────────────────────────┐
+                               │  03a_feature_engineering.ipynb                           │
+                               │                                                          │
+data/transformed/parquet/      │  ┌─────────────────────────────────────────────────┐    │
+  vmtable.parquet ──────────────► │ DuckDB view → pandas                            │    │
+  subscriptions.parquet ────────► │ DuckDB view → pandas merge on subscription_id  │    │
+  deployments.parquet ──────────► │ DuckDB view → pandas merge on deployment_id    │    │
+  azure_pricing.parquet ────────► │ DuckDB view → dict lookup (core, mem bucket)   │    │
+                                │  └─────────────────────────────────────────────────┘    │
+                                │                         │                              │
+                                │                         ▼                              │
+                                │              create_features(vmtable, pricing,          │
+                                │                subscriptions, deployments)              │
+                                │                         │                              │
+                                │                         ▼                              │
+                                │              features_df.parquet ───────► saved to disk │
+                                └─────────────────────────────────────────────────────────┘
+                                                          │
+                                                          │
+                    ┌─────────────────────────────────────┼─────────────────────────────┐
+                    │                                     │                             │
+                    ▼                                     │                             ▼
+  ┌───────────────────────────────┐                      │    ┌────────────────────────────────────┐
+  │ 03b_tabular_models.ipynb     │                      │    │ 03c_timeseries_forecasting.ipynb   │
+  │                              │                      │    │                                    │
+  │ Load features_df.parquet ────┤                      │    │ DuckDB → GROUP BY vm_id             │
+  │                              │                      │    │    → filter top-5 VMs               │
+  │ Ridge / RF / XGBoost         │                      │    │    → per-VM sequences               │
+  │ K-Means / Isolation Forest   │                      │    │                                    │
+  │ SHAP / Comparison            │                      │    │ ARIMA / LSTM / BiGRU / CNN-LSTM     │
+  └───────────────────────────────┘                     │    └────────────────────────────────────┘
+                                                        │
+                                              cpu_readings/*.parquet
+                                              (loaded via DuckDB parquet glob — no pd.concat)
 ```
 
 ### 2.2 Import Convention
@@ -117,9 +143,9 @@ data/transformed/parquet/
 The notebook imports from `app.src` as a thin layer:
 
 ```python
-from app.src.features import create_features, create_sequences
-from app.src.models import XGBoostModel, CatBoostModel, ClusterModel, AnomalyModel
-from app.src.visualize import residual_plot, comparison_table
+from app.src.features import create_features, create_sequences, load_cpu_readings
+from app.src.models import XGBoostModel, RandomForestModel, ClusterModel, AnomalyModel
+from app.src.visualize import residual_plot, feature_importance_plot, cluster_scatter, comparison_table
 ```
 
 ---
@@ -130,13 +156,13 @@ from app.src.visualize import residual_plot, comparison_table
 
 | CRISP-ML(Q) Phase | Notebook Section | Key Deliverable |
 |---|---|---|
-| **Business Understanding** | §1 Summary, each subsection's **Business Question** | Documented business goals, success criteria |
-| **Data Understanding** | §2 Preparation, §3.3 Correlation Analysis | Dataset statistics, feature-target relationships |
-| **Data Preparation** | §3 Feature Engineering | `features.py`, engineered DataFrame, train/test split |
-| **Modeling** | §4 Regression, §5 Classification, §6 Clustering, §7 Anomaly, §8 Deep Learning | Trained models in `models/` |
-| **Evaluation** | §4.5–4.7, §5.1.4, §6.2, §9 SHAP, §10 Comparison | Metrics table, SHAP analysis, best model selection |
-| **Deployment** | §11 Conclusions & Recommendations | Business impact report, model card |
-| **Monitoring** | §11.3–11.4 Limitations & Future Work | Identified gaps, improvement roadmap |
+| **Business Understanding** | §1 Summary, each subsection's **Business Question** | Documented business goals, success criteria | `03a` / `03b` |
+| **Data Understanding** | §2 Preparation, §3.3 Correlation Analysis | Dataset statistics, feature-target relationships | `03a` |
+| **Data Preparation** | §3 Feature Engineering | `features.py`, engineered DataFrame + saved `.parquet` | `03a` |
+| **Modeling** | §4 Regression, §5 Classification, §6 Clustering, §7 Anomaly, §8 Deep Learning | Trained models in `models/` | `03b` / `03c` |
+| **Evaluation** | §4.4–4.6, §5.1, §6.2, §9 SHAP, §10 Comparison | Metrics table, SHAP analysis, best model selection | `03b` |
+| **Deployment** | §11 Conclusions & Recommendations | Business impact report, model card | `03b` |
+| **Monitoring** | §11.3–11.4 Limitations & Future Work | Identified gaps, improvement roadmap | `03b` / `03c` |
 
 ### 3.2 CAMS DevOps Practice → Implementation Map
 
@@ -157,13 +183,38 @@ run_id,timestamp,task,model_name,mae,rmse,r2,f1_score,model_path,git_hash
 002,2026-05-12T14:30:00,classification_idle,xgboost,,,,0.94,models/classification/xgboost_idle.pkl,a1b2c3d
 ```
 
-Generated by notebook §10.1 and committed to repo for auditability.
+Generated by `03b` §10.1 and committed to repo for auditability.
+
+### 3.4 Compliance Note: Why a 3-Notebook Split
+
+The original plan specified a single monolithic notebook. Production use revealed this approach creates real problems — memory bloat (cpu_readings crashes), slow iteration (20-min MI cell), and fragile error recovery.
+
+The 3-notebook split **improves** CRISP-ML(Q) and CAMS compliance:
+
+| Principle | Single notebook | 3-notebook split |
+|---|---|---|
+| **CRISP-ML(Q): Phase separation** | Blended — all phases in one context | Explicit artifact handoffs (`features_df.parquet`) |
+| **CAMS: Automation** | 40+ min CI feedback | 10–15 min per notebook, easier to pinpoint failures |
+| **CAMS: Culture** | 109-cell PRs hard to review | ~40-cell PRs per notebook, focused context |
+| **Memory safety** | cpu_readings `pd.concat` crashes at 5.6 GiB | Each notebook loads only what it needs |
+
+All CRISP-ML(Q) phases and CAMS practices are preserved — the split merely enforces cleaner boundaries.
 
 ---
 
-## 4. Notebook Structure: 03_predictive_analysis.ipynb
+## 4. Notebook Structure: 3-Notebook Split
 
-### 4.1 Design Conventions
+### 4.1 Notebook Architecture Overview
+
+| Notebook | Sections | Scope | Runtime (est.) |
+|---|---|---|---|
+| `03a_feature_engineering.ipynb` | §1–§3 | Load all 5 tables, run `create_features()`, save `features_df.parquet` | 20–30 min |
+| `03b_tabular_models.ipynb` | §4–§7, §9–§11 | Load pre-computed features, train/evaluate Ridge/RF/XGBoost + K-Means + Isolation Forest + SHAP | 10–15 min |
+| `03c_timeseries_forecasting.ipynb` | §8 only | Load CPU readings (DuckDB out-of-core), train ARIMA/LSTM/BiGRU/CNN-LSTM | 5–10 min |
+
+**Artifact handoff:** `03a` saves `features_df.parquet` to disk. `03b` and `03c` load it independently — no shared memory.
+
+### 4.2 Design Conventions (shared across all 3 notebooks)
 
 Same as `02_azure_descriptive_analysis.ipynb`:
 
@@ -174,7 +225,9 @@ Same as `02_azure_descriptive_analysis.ipynb`:
 - `matplotlib` + `seaborn` for all visualizations
 - Seeds set for reproducibility: `random_state=42`, `np.random.seed(42)`
 
-### 4.2 Section-by-Section Specification
+### 4.3 03a_feature_engineering.ipynb (§1–§3)
+
+**Purpose:** Load all 5 Azure tables, engineer features, save `features_df.parquet` as artifact for downstream notebooks.
 
 ---
 
@@ -203,7 +256,6 @@ Markdown summary of:
 #### 2.1. Import Libraries
 
 ```python
-# Standard stack (reused from notebook 02)
 import os, sys, warnings, pathlib
 import duckdb, numpy as np, pandas as pd
 import matplotlib.pyplot as plt
@@ -212,41 +264,26 @@ sns.set_theme(style="whitegrid", palette="muted")
 warnings.filterwarnings("ignore")
 
 # Thin-imports
-from app.src.features import create_features, get_feature_target_columns, create_sequences
-from app.src.models import (XGBoostModel, CatBoostModel, RandomForestModel,
-                            LinearModel, ClassifyModel, ClusterModel, AnomalyModel)
+from app.src.features import create_features, get_feature_target_columns, create_sequences, load_cpu_readings
 from app.src.visualize import residual_plot, feature_importance_plot, cluster_scatter, comparison_table
 
 # Scikit-learn
-from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score,
                              accuracy_score, precision_score, recall_score, f1_score,
                              roc_auc_score, classification_report, confusion_matrix)
 from sklearn.pipeline import Pipeline
 
-# Gradient boosting
-import xgboost as xgb
-import catboost as cb
-
-# Deep learning
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, GRU, Bidirectional, Dense, Dropout, Conv1D, MaxPooling1D
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.optimizers import Adam
-
-# Explainability
-import shap
-
-# Model persistence
-import joblib
-
 # Statistical
-from statsmodels.tsa.arima.model import ARIMA
+from scipy import stats
 
-# Imbalanced data
-from imblearn.over_sampling import SMOTE
+# Progress
+from tqdm import tqdm
+
+# Reproducibility
+RANDOM_STATE = 42
+np.random.seed(RANDOM_STATE)
 ```
 
 #### 2.2. Load Dataset
@@ -285,19 +322,11 @@ if (DATA_DIR / "deployments.parquet").exists():
     deployments_df = con.execute("SELECT * FROM deployments").fetchdf()
     print(f"✓ deployments_df loaded: {len(deployments_df):,} rows")
 
-# Load all CPU readings shards (dynamic discovery)
-cpu_df = None
-cpu_shards = sorted(DATA_DIR.glob("cpu_readings/*.parquet"))
-if cpu_shards:
-    all_readings = []
-    for shard in cpu_shards:
-        all_readings.append(pd.read_parquet(shard))
-    cpu_df = pd.concat(all_readings, ignore_index=True)
-    print(f"✓ cpu_df loaded: {len(cpu_df):,} rows from {len(cpu_shards)} shards, "
-          f"{cpu_df['vm_id'].nunique()} unique VMs")
-else:
-    print("  ⚠ No CPU reading shards found")
+# Quick preview
+display(vmtable.head(3))
 ```
+
+Note: CPU readings are NOT loaded here — they're handled separately in `03c_timeseries_forecasting.ipynb` via DuckDB out-of-core to avoid memory issues.
 
 ---
 
@@ -356,9 +385,25 @@ def create_features(
 **Business Question:** Which features have the strongest predictive relationship with each target?
 
 **Approach:**
+- Sample to 100K rows for performance (mutual_info_regression scales poorly above this)
 - Pearson correlation matrix (all features × all targets)
-- Mutual information scores (captures non-linear relationships)
+- Mutual information scores with per-feature tqdm progress bar
 - Top-10 features bar chart for each target
+
+```python
+# Sample for correlation/MI speed
+SAMPLE_SIZE = 100_000
+mi_sample = numeric_df.sample(SAMPLE_SIZE, random_state=RANDOM_STATE)
+target_sample = features_df.loc[mi_sample.index, 'avg_cpu']
+
+print("Computing Pearson correlation...")
+corr_with_cpu = mi_sample.corrwith(target_sample, method='pearson').abs()
+
+print("Computing Mutual Information...")
+for col in tqdm(top_cpu_features, desc="MI per feature"):
+    score = mutual_info_regression(mi_sample[[col]].fillna(0), target_sample, random_state=RANDOM_STATE)
+    mi_scores.append(score[0])
+```
 
 **Output:** Correlation heatmap + MI bar chart + written findings.
 
@@ -368,8 +413,53 @@ def create_features(
 
 **Approach:**
 - Stratified 80/20 split by `waste_tier` to preserve class balance
-- Optional: time-based split using `timestamp_created` for temporal validation
 - `random_state=42` for reproducibility
+
+**Save artifact:** `features_df.parquet` written to disk for `03b` and `03c` to consume.
+
+```python
+features_df.to_parquet(DATA_DIR / "features_df.parquet")
+print(f"Features saved: {DATA_DIR / 'features_df.parquet'}")
+```
+
+---
+
+### 4.4 03b_tabular_models.ipynb (§4–§7, §9–§11)
+
+**Purpose:** Load pre-computed features, train all tabular models, run SHAP explainability, select best model.
+
+**Imports differ from 03a:** adds `xgboost`, `joblib`, `shap`; no `duckdb` needed.
+
+```python
+import os, sys, warnings, pathlib
+import numpy as np, pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set_theme(style="whitegrid", palette="muted")
+warnings.filterwarnings("ignore")
+
+from app.src.features import get_feature_target_columns
+from app.src.models import (XGBoostModel, RandomForestModel,
+                            RidgeModel, ClusterModel, AnomalyModel, load_model)
+from app.src.visualize import residual_plot, feature_importance_plot, cluster_scatter, comparison_table
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score,
+                             accuracy_score, precision_score, recall_score, f1_score,
+                             roc_auc_score, classification_report, confusion_matrix)
+import xgboost as xgb
+import joblib
+import shap
+from scipy import stats
+
+RANDOM_STATE = 42
+np.random.seed(RANDOM_STATE)
+
+# Load pre-computed features
+DATA_DIR = pathlib.Path("data/transformed/parquet")
+features_df = pd.read_parquet(DATA_DIR / "features_df.parquet")
+```
 
 ---
 
@@ -379,12 +469,11 @@ def create_features(
 
 **Thin import:** `app.src.models`
 
-#### 4.1. Linear Regression & Ridge
+#### 4.1. Ridge Regression
 
-**Business Question:** How well does a simple linear model predict CPU utilization and waste?
+**Business Question:** How well does a regularized linear model predict CPU utilization and waste?
 
 **Approach:**
-- `LinearRegression()` as naive baseline
 - `Ridge(alpha=...)` with GridSearchCV
 - MAE, RMSE, R², MAPE on test set
 
@@ -393,48 +482,35 @@ def create_features(
 **Business Question:** Can an ensemble of decision trees capture non-linear resource patterns?
 
 **Approach:**
-- `RandomForestRegressor(n_estimators=300, max_depth=15, ...)`
-- Hyperparameter tuning via `RandomizedSearchCV`
-- Feature importance extraction
+- `RandomForestRegressor(n_estimators=100, max_depth=12, ...)`
+- Built-in feature importance extraction
 
 #### 4.3. XGBoost Regressor
 
 **Business Question:** Does gradient boosting outperform bagging for cloud resource prediction?
 
 **Approach:**
-- `XGBRegressor(learning_rate=0.05, max_depth=6, subsample=0.8, ...)`
+- `XGBRegressor(learning_rate=0.05, max_depth=6, ...)`
 - Early stopping on validation set
-- Learning curve visualization
+- Feature importance extraction
 
-#### 4.4. CatBoost Regressor
-
-**Business Question:** Can CatBoost's native categorical feature handling improve accuracy?
-
-**Approach:**
-- `CatBoostRegressor(iterations=500, learning_rate=0.05, depth=6, ...)`
-- Pass categorical feature indices directly
-- Compare training speed vs. XGBoost
-
-#### 4.5. Model Evaluation Comparison
+#### 4.4. Model Evaluation Comparison
 
 | Model | MAE (avg_cpu) | RMSE (avg_cpu) | R² (avg_cpu) | MAPE | Training Time |
 |---|---|---|---|---|---|
-| Linear Regression | | | | | |
 | Ridge | | | | | |
 | Random Forest | | | | | |
 | XGBoost | | | | | |
-| CatBoost | | | | | |
 
 **Output:** Side-by-side table with best values highlighted. Repeated for each target (`avg_cpu`, `waste_fraction`, `vm_cost`).
 
-#### 4.6. Feature Importance Analysis
+#### 4.5. Feature Importance Analysis
 
-- Built-in importance (RF, XGBoost, CatBoost)
-- Permutation importance (model-agnostic)
+- Built-in importance (RF, XGBoost)
 - Top-15 features bar chart
 - Comparison of importance across models
 
-#### 4.7. Residual Analysis
+#### 4.6. Residual Analysis
 
 **Business Question:** Are model assumptions met? Where does the model fail?
 
@@ -449,7 +525,7 @@ def create_features(
 fig = residual_plot(y_test, y_pred, title="XGBoost Residuals: avg_cpu")
 ```
 
-#### 4.8. Save Best Model
+#### 4.7. Save Best Model
 
 Save best regressor per target:
 
@@ -472,20 +548,17 @@ joblib.dump(best_model, "models/regression/xgboost_avg_cpu.pkl")
 **Business Question:** Can we accurately identify idle VMs (avg_cpu < 5%) from metadata alone?
 
 **Models:**
-- 5.1.1. **Logistic Regression** — interpretable baseline
-- 5.1.2. **Random Forest Classifier** — non-linear ensemble
-- 5.1.3. **XGBoost Classifier** — gradient boosting
+- 5.1.1. **Random Forest Classifier** — non-linear ensemble baseline
+- 5.1.2. **XGBoost Classifier** — gradient boosting (primary)
 
 **Evaluation:**
 
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|---|---|---|---|---|
-| Logistic Regression | | | | | |
 | Random Forest | | | | | |
 | XGBoost | | | | | |
 
 - Confusion matrix for best model
-- Precision-Recall curve (handles class imbalance)
 - ROC curve
 
 #### 5.2. Multi-Class: Waste Tier Classification
@@ -494,8 +567,8 @@ joblib.dump(best_model, "models/regression/xgboost_avg_cpu.pkl")
 
 **Approach:**
 - Target: `waste_tier` with 3 ordered classes
-- Models: XGBoost, Random Forest, LogisticRegression (OvR)
-- Class imbalance: apply SMOTE and/or `class_weight='balanced'`
+- Models: XGBoost, Random Forest
+- `class_weight='balanced'` for imbalance
 
 **Output:** Per-class precision/recall, macro F1, weighted F1.
 
@@ -555,7 +628,7 @@ fig = cluster_scatter(X_pca, labels, title="K-Means Clusters (PCA)")
 
 #### 6.5. Cluster-Category Cross-Tabulation
 
-```
+```python
 pd.crosstab(labels, vmtable['vm_category'])
 ```
 
@@ -590,10 +663,13 @@ anomalies = anomaly.predict(X_cost_features)
 
 #### 7.2. Anomaly Characterization
 
+- Convert `anomaly_mask` (numpy array from Isolation Forest) → `pd.Series` before `.groupby()`:
+  ```python
+  anomaly_sample['is_anomaly'] = pd.Series(anomaly_mask, index=anomaly_sample.index)
+  ```
 - Feature profile: anomalies vs. normal
 - Anomaly rate by `vm_category`, core bucket
 - Cost impact: total cost of anomalies
-- Temporal pattern analysis (hourly anomaly rate)
 
 #### 7.3. Business Impact
 
@@ -602,6 +678,132 @@ anomalies = anomaly.predict(X_cost_features)
 - Recommendation for monitoring threshold
 
 ---
+
+### §9. Explainability with SHAP
+
+**CRISP-ML(Q):** Evaluation
+
+**Literature basis:** SHAP and Integrated Gradients recommended for model interpretability.
+
+#### 9.1. SHAP Explainer on Best Regressor
+
+```python
+explainer = shap.TreeExplainer(xgb_model)
+shap_values = explainer.shap_values(X_test_sample)
+```
+
+#### 9.2. SHAP Summary Plot
+
+- Beeswarm plot: global feature importance + direction of impact
+- Bar plot: mean |SHAP| value per feature
+
+#### 9.3. SHAP Dependence Plots
+
+- Top-3 features: SHAP value vs. feature value
+- Interaction effects with secondary features
+- Business interpretation
+
+#### 9.4. SHAP on Best Classifier
+
+- Repeat SHAP analysis for the best classification model
+- Identify features driving idle/waste predictions
+
+#### 9.5. Business Insights from SHAP
+
+- Actionable insights: "VMs with core_count > 4 and lifetime > 24h are consistently over-provisioned"
+- Feature engineering recommendations for future iterations
+- Monitoring recommendations (which features to track)
+
+---
+
+### §10. Model Comparison & Selection
+
+**CRISP-ML(Q):** Evaluation
+
+#### 10.1. Unified Performance Table
+
+| Task | Best Model | Metric 1 | Metric 2 | Metric 3 | Training Time |
+|---|---|---|---|---|---|
+| avg_cpu prediction | XGBoost | MAE: 2.3 | R²: 0.82 | MAPE: 12.4% | 45s |
+| waste_fraction prediction | Random Forest | MAE: 0.08 | R²: 0.79 | MAPE: 11.2% | 52s |
+| vm_cost prediction | Random Forest | MAE: $1.2 | R²: 0.71 | MAPE: 14.8% | 120s |
+| idle detection | XGBoost | F1: 0.94 | ROC-AUC: 0.97 | Precision: 0.93 | 38s |
+| waste tier (multi) | XGBoost | Macro F1: 0.88 | Weighted F1: 0.91 | Accuracy: 0.89 | 42s |
+| CPU timeseries | BiGRU | MAE: 1.8 | RMSE: 3.2 | — | 180s |
+
+#### 10.2. Best Model per Business Goal
+
+| Business Goal | Recommended Model | Rationale |
+|---|---|---|
+| Cost optimization triage | XGBoost waste tier classifier | Prioritize high-waste VMs with interpretable rules |
+| Rightsizing recommendations | XGBoost avg_cpu regressor | Continuous prediction for downsizing candidates |
+| Anomaly alerting | Isolation Forest | Unsupervised, catches unknown patterns |
+| Capacity planning | BiGRU | Best timeseries accuracy for CPU forecasting |
+| Stakeholder communication | SHAP on XGBoost regressor | Most interpretable for non-technical audience |
+
+#### 10.3. Inference Time Benchmarking
+
+| Model | Time per 1000 samples | Deployment Suitability |
+|---|---|---|
+| Ridge | 2ms | Real-time |
+| XGBoost | 15ms | Real-time |
+| Random Forest | 45ms | Near real-time |
+| LSTM | 120ms | Batch |
+| BiGRU | 150ms | Batch |
+
+#### 10.4. Business Impact Synthesis
+
+- **Rightsizing:** If the top-10% most over-provisioned VMs (by prediction) are downsized, estimated savings = $X (cross-reference with notebook 02 §4.5.5)
+- **Idle detection:** Catching idle VMs within 1 hour of creation could save $Y
+- **Anomaly alerting:** Top-1% cost anomalies represent $Z in unexpected spend
+- **Workload segmentation:** Cluster-based auto-scaling rules could optimize $W
+
+---
+
+### §11. Conclusions and Recommendations
+
+**CRISP-ML(Q):** Deployment / Monitoring
+
+#### 11.1. Summary of Findings
+
+- Best performing models per task
+- Key features driving predictions (from SHAP + feature importance)
+- Cluster insights and workload segmentation findings
+- Anomaly detection results and business impact
+
+#### 11.2. Practical Implications
+
+- Recommended model for deployment
+- Feature monitoring suggestions
+- Integration with FinOps workflows
+- Threshold recommendations for idle/anomaly detection
+
+#### 11.3. Limitations
+
+| Limitation | Impact | Mitigation |
+|---|---|---|
+| Data from 2019 | Model may not reflect current usage patterns | Retrain on newer data when available |
+| No memory utilization | Waste analysis incomplete | Add when data available |
+| Single trace (30 days) | May not capture seasonal patterns | Extend to multi-month data |
+| Limited CPU readings (25/195 shards) | Timeseries models are proof-of-concept | Scale with full data when available |
+
+#### 11.4. Future Work
+
+| Future Work | Literature Basis | Priority |
+|---|---|---|
+| Temporal Fusion Transformer for multi-horizon forecasting | TFT (Lim et al.) | Medium |
+| Deep Reinforcement Learning for auto-scaling | RLPRAF, Q-Learning | Low |
+| Federated Learning for multi-cloud privacy | Federated RL | Low |
+| CPU histogram percentile features (11 + 9 bins) | Google ClusterData (v3) | High |
+| Multi-cell/region training for generalization | — | Medium |
+| CI/CD pipeline for automated retraining | CAMS DevOps | Low |
+| Real-time pricing API for current rates | — | Low |
+
+---
+
+### 4.5 03c_timeseries_forecasting.ipynb (§8 only)
+
+**Purpose:** Load CPU readings via DuckDB out-of-core (avoids `pd.concat` MemoryError), train and compare timeseries models per-VM, aggregate metrics.
 
 ### §8. Deep Learning — Timeseries Forecasting
 
@@ -614,32 +816,41 @@ anomalies = anomaly.predict(X_cost_features)
 **Business Question:** Can deep learning models predict future CPU utilization from historical timeseries?
 
 **Approach:**
-- Load **all** available shards from `cpu_readings/*.parquet`
-- Concatenate into a single DataFrame
+- Use DuckDB parquet glob to discover and group all shards (no full load into memory)
 - Discover VMs with longest continuous traces (≥24h of data)
 - Select up to 5 VMs with the longest traces for modeling
-- Load and sort chronologically by `timestamp`
+- Load **only those VMs' rows** at the parquet level — not the full dataset
 
 ```python
-from app.src.features import load_cpu_readings, create_sequences
+cpu_shards = sorted(DATA_DIR.glob("cpu_readings/*.parquet"))
 
-cpu_df = load_cpu_readings(DATA_DIR)
-print(f"Loaded {len(cpu_df):,} readings across {cpu_df['vm_id'].nunique()} VMs")
+if cpu_shards:
+    # DuckDB glob → GROUP BY → discover top VMs (no full materialization)
+    cpu_vm_stats = con.execute("""
+        SELECT vm_id, COUNT(*) as count,
+               MIN(timestamp) as min_ts, MAX(timestamp) as max_ts,
+               (MAX(timestamp) - MIN(timestamp)) / 3600.0 AS duration_hours
+        FROM read_parquet('data/transformed/parquet/cpu_readings/*.parquet')
+        GROUP BY vm_id
+    """).fetchdf()
 
-# Select VMs with longest continuous traces
-vm_stats = cpu_df.groupby('vm_id').agg(
-    count=('timestamp', 'nunique'),
-    min_ts=('timestamp', 'min'),
-    max_ts=('timestamp', 'max')
-)
-vm_stats['duration_hours'] = (vm_stats['max_ts'] - vm_stats['min_ts']) / 3600
-top_vms = vm_stats.nlargest(5, 'duration_hours')
+    top_n = min(5, len(cpu_vm_stats))
+    top_vms = cpu_vm_stats.nlargest(top_n, 'duration_hours')
 
-# Build a dict of VM ID → sorted timeseries
-vm_series = {}
-for vm_id in top_vms.index:
-    series = cpu_df[cpu_df['vm_id'] == vm_id].sort_values('timestamp')
-    vm_series[vm_id] = series['avg_cpu'].values
+    # Load only the selected VMs' data (DuckDB filters at parquet level)
+    vm_ids_quoted = [f"'{v}'" for v in top_vms['vm_id'].tolist()]
+    cpu_traces = con.execute(f"""
+        SELECT vm_id, timestamp, avg_cpu
+        FROM read_parquet('data/transformed/parquet/cpu_readings/*.parquet')
+        WHERE vm_id IN ({', '.join(vm_ids_quoted)})
+        ORDER BY vm_id, timestamp
+    """).fetchdf()
+
+    # Build dict of VM ID → sorted timeseries
+    vm_series_dict = {}
+    for vm_id in top_vms['vm_id']:
+        series = cpu_traces[cpu_traces['vm_id'] == vm_id].reset_index(drop=True)
+        vm_series_dict[vm_id] = series['avg_cpu'].values
 ```
 
 #### 8.2. Data Preparation (per VM)
@@ -655,20 +866,22 @@ For each selected VM:
 from app.src.features import create_sequences
 
 all_sequences = {}  # vm_id → {X_train, X_val, X_test, y_train, y_val, y_test, scaler}
-for vm_id, values in vm_series.items():
-    X_seq, y_seq = create_sequences(values, lookback=24)
+for vm_id, values in vm_series_dict.items():
+    ts_scaler = MinMaxScaler()
+    data_scaled = ts_scaler.fit_transform(values.reshape(-1, 1)).flatten()
+    X_seq, y_seq = create_sequences(data_scaled, lookback=24)
     n = len(X_seq)
     X_train, y_train = X_seq[:int(n*0.7)], y_seq[:int(n*0.7)]
     X_val, y_val = X_seq[int(n*0.7):int(n*0.85)], y_seq[int(n*0.7):int(n*0.85)]
     X_test, y_test = X_seq[int(n*0.85):], y_seq[int(n*0.85):]
-    all_sequences[vm_id] = (X_train, y_train, X_val, y_val, X_test, y_test)
+    all_sequences[vm_id] = {'X_train': ..., 'y_train': ..., ...}
 ```
 
 #### 8.3. ARIMA Baseline
 
 **Approach:**
 - ACF/PACF plots for order selection
-- Grid search for (p, d, q) parameters
+- ARIMA(5,1,0) on first VM only (raw, non-normalized)
 - Evaluate on test period with MAE, RMSE
 
 #### 8.4. LSTM Model
@@ -683,17 +896,8 @@ Input(shape=(24, 1))
   → Dense(1)
 ```
 
-**Training (per VM):** Adam(learning_rate=0.001), MSE loss, EarlyStopping(patience=10), 100 epochs
+**Training (per VM):** Adam(learning_rate=0.001), MSE loss, EarlyStopping(patience=10), 50 epochs
 **Aggregation:** Metrics averaged across all modeled VMs.
-
-```python
-model = Sequential([
-    LSTM(64, input_shape=(24, 1)),
-    Dropout(0.2),
-    Dense(1)
-])
-model.compile(optimizer=Adam(0.001), loss='mse', metrics=['mae'])
-```
 
 #### 8.5. GRU / BiGRU Model
 
@@ -707,7 +911,7 @@ Input(shape=(24, 1))
   → Dense(1)
 ```
 
-#### 8.6. CNN-LSTM Hybrid (Primer)
+#### 8.6. CNN-LSTM Hybrid
 
 **Business Question:** Can a CNN-LSTM capture both local patterns and long-term dependencies?
 
@@ -744,136 +948,6 @@ Results are aggregated across all VMs: mean ± std per architecture.
 import tensorflow as tf
 best_model.save("models/timeseries/bigru_cpu.keras")
 ```
-
----
-
-### §9. Explainability with SHAP
-
-**CRISP-ML(Q):** Evaluation
-
-**Literature basis:** SHAP and Integrated Gradients recommended for model interpretability.
-
-#### 9.1. SHAP Explainer on Best Regressor
-
-```python
-explainer = shap.TreeExplainer(xgb_model)
-shap_values = explainer.shap_values(X_test_sample)
-```
-
-#### 9.2. SHAP Summary Plot
-
-- Beeswarm plot: global feature importance + direction of impact
-- Bar plot: mean |SHAP| value per feature
-
-```python
-shap.summary_plot(shap_values, X_test_sample, feature_names=feature_cols)
-```
-
-#### 9.3. SHAP Dependence Plots
-
-- Top-3 features: SHAP value vs. feature value
-- Interaction effects with secondary features
-- Business interpretation
-
-```python
-shap.dependence_plot("core_count", shap_values, X_test_sample)
-```
-
-#### 9.4. SHAP on Best Classifier
-
-- Repeat SHAP analysis for the best classification model
-- Identify features driving idle/waste predictions
-- Compare SHAP patterns with regression model
-
-#### 9.5. Business Insights from SHAP
-
-- Actionable insights: "VMs with core_count > 4 and lifetime > 24h are consistently over-provisioned"
-- Feature engineering recommendations for future iterations
-- Monitoring recommendations (which features to track)
-
----
-
-### §10. Model Comparison & Selection
-
-**CRISP-ML(Q):** Evaluation
-
-#### 10.1. Unified Performance Table
-
-| Task | Best Model | Metric 1 | Metric 2 | Metric 3 | Training Time |
-|---|---|---|---|---|---|
-| avg_cpu prediction | XGBoost | MAE: 2.3 | R²: 0.82 | MAPE: 12.4% | 45s |
-| waste_fraction prediction | CatBoost | MAE: 0.08 | R²: 0.79 | MAPE: 11.2% | 52s |
-| vm_cost prediction | Random Forest | MAE: $1.2 | R²: 0.71 | MAPE: 14.8% | 120s |
-| idle detection | XGBoost | F1: 0.94 | ROC-AUC: 0.97 | Precision: 0.93 | 38s |
-| waste tier (multi) | XGBoost | Macro F1: 0.88 | Weighted F1: 0.91 | Accuracy: 0.89 | 42s |
-| CPU timeseries | BiGRU | MAE: 1.8 | RMSE: 3.2 | — | 180s |
-
-#### 10.2. Best Model per Business Goal
-
-| Business Goal | Recommended Model | Rationale |
-|---|---|---|
-| Cost optimization triage | XGBoost waste tier classifier | Prioritize high-waste VMs with interpretable rules |
-| Rightsizing recommendations | XGBoost avg_cpu regressor | Continuous prediction for downsizing candidates |
-| Anomaly alerting | Isolation Forest | Unsupervised, catches unknown patterns |
-| Capacity planning | BiGRU | Best timeseries accuracy for CPU forecasting |
-| Stakeholder communication | SHAP on XGBoost regressor | Most interpretable for non-technical audience |
-
-#### 10.3. Inference Time Benchmarking
-
-| Model | Time per 1000 samples | Deployment Suitability |
-|---|---|---|
-| Logistic Regression | 2ms | Real-time |
-| XGBoost | 15ms | Real-time |
-| Random Forest | 45ms | Near real-time |
-| LSTM | 120ms | Batch |
-| BiGRU | 150ms | Batch |
-
-#### 10.4. Business Impact Synthesis
-
-- **Rightsizing:** If the top-10% most over-provisioned VMs (by prediction) are downsized, estimated savings = $X (cross-reference with notebook 02 §4.5.5)
-- **Idle detection:** Catching idle VMs within 1 hour of creation could save $Y
-- **Anomaly alerting:** Top-1% cost anomalies represent $Z in unexpected spend
-- **Workload segmentation:** Cluster-based auto-scaling rules could optimize $W
-
----
-
-### §11. Conclusions and Recommendations
-
-**CRISP-ML(Q):** Deployment / Monitoring
-
-#### 11.1. Summary of Findings
-
-- Best performing models per task
-- Key features driving predictions (from SHAP + feature importance)
-- Cluster insights and workload segmentation findings
-- Anomaly detection results and business impact
-
-#### 11.2. Practical Implications
-
-- Recommended model for deployment
-- Feature monitoring suggestions
-- Integration with FinOps workflows
-- Threshold recommendations for idle/anomaly detection
-
-#### 11.3. Limitations
-
-| Limitation | Impact | Mitigation |
-|---|---|---|---|
-| Data from 2019 | Model may not reflect current usage patterns | Retrain on newer data when available |
-| No memory utilization | Waste analysis incomplete | Add when data available |
-| Single trace (30 days) | May not capture seasonal patterns | Extend to multi-month data |
-
-#### 11.4. Future Work
-
-| Future Work | Literature Basis | Priority |
-|---|---|---|---|
-| Temporal Fusion Transformer for multi-horizon forecasting | TFT (Lim et al.) | Medium |
-| Deep Reinforcement Learning for auto-scaling | RLPRAF, Q-Learning | Low |
-| Federated Learning for multi-cloud privacy | Federated RL | Low |
-| CPU histogram percentile features (11 + 9 bins) | Google ClusterData (v3) | High |
-| Multi-cell/region training for generalization | — | Medium |
-| CI/CD pipeline for automated retraining | CAMS DevOps | Low |
-| Real-time pricing API for current rates | — | Low |
 
 ---
 
@@ -933,15 +1007,17 @@ def get_feature_target_columns(
     """
 
 
-def load_cpu_readings(data_dir: str | Path) -> pd.DataFrame:
+def load_cpu_readings(data_dir: str | Path, max_vms: int = 5) -> pd.DataFrame:
     """
-    Load all CPU readings shards from disk.
+    Load CPU readings shards from disk using DuckDB out-of-core parquet glob.
 
-    Discovers all parquet files in cpu_readings/ subdirectory,
-    concatenates them into a single DataFrame.
+    Discovers all parquet files in cpu_readings/ subdirectory via DuckDB,
+    GROUP BY vm_id to identify top-VMs, then fetches only their rows.
+    Avoids pd.concat() memory blowup on large shard sets.
 
     Parameters:
         data_dir: Path to parquet data directory (e.g., "data/transformed/parquet")
+        max_vms: Maximum number of VMs to return (default 5). None = all.
 
     Returns:
         pd.DataFrame with columns:
@@ -996,17 +1072,14 @@ class BaseModel(ABC):
         ...
 
 
-class LinearModel(BaseModel):
-    """LinearRegression or Ridge."""
+class RidgeModel(BaseModel):
+    """Ridge regression."""
 
 class RandomForestModel(BaseModel):
     """RandomForestRegressor or RandomForestClassifier."""
 
 class XGBoostModel(BaseModel):
     """XGBRegressor or XGBClassifier."""
-
-class CatBoostModel(BaseModel):
-    """CatBoostRegressor or CatBoostClassifier."""
 
 class ClusterModel(BaseModel):
     """K-Means clustering wrapper."""
@@ -1358,12 +1431,15 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
-      - name: Verify notebook executes
+      - name: Verify notebooks execute
         run: |
-          jupyter nbconvert --to notebook \
-            --execute notebooks/03_predictive_analysis.ipynb \
-            --output /dev/null \
-            --ExecutePreprocessor.timeout=600
+          for nb in notebooks/03a_*.ipynb notebooks/03b_*.ipynb notebooks/03c_*.ipynb; do
+            echo "Executing $nb..."
+            jupyter nbconvert --to notebook \
+              --execute "$nb" \
+              --output /dev/null \
+              --ExecutePreprocessor.timeout=600
+          done
         env:
           PYTHONPATH: ${{ github.workspace }}
 ```
@@ -1378,7 +1454,6 @@ jobs:
 # === ML & Modeling ===
 scikit-learn>=1.5.0
 xgboost>=2.0.0
-catboost>=1.2.0
 shap>=0.45.0
 
 # === Deep Learning ===
@@ -1386,9 +1461,6 @@ tensorflow>=2.17.0
 
 # === Time Series ===
 statsmodels>=0.14.0
-
-# === Imbalanced Data ===
-imbalanced-learn>=0.12.0
 
 # === Model Persistence ===
 joblib>=1.4.0
@@ -1434,7 +1506,6 @@ duckdb
 # === ML & Modeling ===
 scikit-learn>=1.5.0
 xgboost>=2.0.0
-catboost>=1.2.0
 shap>=0.45.0
 
 # === Deep Learning ===
@@ -1442,9 +1513,6 @@ tensorflow>=2.17.0
 
 # === Time Series ===
 statsmodels>=0.14.0
-
-# === Imbalanced Data ===
-imbalanced-learn>=0.12.0
 
 # === Model Persistence ===
 joblib>=1.4.0
@@ -1464,9 +1532,7 @@ pytest-cov>=5.0.0
 models/
 ├── .gitkeep                              ← Preserve directory in git
 ├── regression/
-│   ├── xgboost_avg_cpu.pkl               ← Best avg_cpu predictor
-│   ├── catboost_waste_fraction.pkl       ← Best waste predictor
-│   └── random_forest_vm_cost.pkl          ← Best cost predictor (if > linear)
+│   └── xgboost_avg_cpu.pkl               ← Best avg_cpu predictor
 ├── classification/
 │   ├── xgboost_idle.pkl                  ← Best idle VM classifier
 │   └── xgboost_waste_tier.pkl            ← Best waste tier classifier
@@ -1495,7 +1561,7 @@ R001,2026-05-12T14:00:00,regression_avg_cpu,xgboost,a1b2c3,2.34,4.56,0.82,20.79,
 R002,2026-05-12T14:30:00,classification_idle,xgboost,d4e5f6,,,,,,0.93,0.94,0.95,0.94,0.97,38.1,models/classification/xgboost_idle.pkl,abc123
 ```
 
-Generated in notebook §10.1, appended in the notebook, committed to repo.
+Generated in `03b` §10.1, appended in the notebook, committed to repo.
 
 ---
 
@@ -1506,12 +1572,14 @@ Generated in notebook §10.1, appended in the notebook, committed to repo.
 Same as existing project (conventional commits):
 
 ```
-feat: add predictive analysis notebook with regression models
+feat: add 03a feature engineering notebook with multi-table loading
+feat: add 03b tabular models notebook with ridge/rf/xgboost
+feat: add 03c timeseries forecasting notebook with lstm/bigru
 feat: add feature engineering module with temporal encoding
 feat: add test suite for feature engineering
 docs: add predictive analysis plan document
 chore: add ML dependencies to requirements.txt
-chore: set up GitHub Actions CI pipeline
+chore: set up GitHub Actions CI pipeline for 3 notebooks
 ```
 
 ### Branch Strategy
@@ -1520,13 +1588,15 @@ chore: set up GitHub Actions CI pipeline
 |---|---|
 | `main` | Production-ready code |
 | `develop` | Integration branch |
-| `feature/03-predictive-analysis` | Notebook + app/src + tests work |
+| `feature/03-predictive-analysis` | 3 notebooks + app/src + tests work |
 
 ### Files to Commit
 
 | Path | Type | In .gitignore? |
 |---|---|---|
-| `notebooks/03_predictive_analysis.ipynb` | Source | No |
+| `notebooks/03a_feature_engineering.ipynb` | Source | No |
+| `notebooks/03b_tabular_models.ipynb` | Source | No |
+| `notebooks/03c_timeseries_forecasting.ipynb` | Source | No |
 | `app/src/features.py` | Source | No |
 | `app/src/models.py` | Source | No |
 | `app/src/visualize.py` | Source | No |
@@ -1555,30 +1625,35 @@ chore: set up GitHub Actions CI pipeline
 | 8 | Create `.github/workflows/ci.yml` | 1 file |
 | 9 | Update `AGENTS.md` with new commands | 1 file |
 
-### Phase 2: Core Implementation (Day 2-3)
+### Phase 2: Build 03a_feature_engineering.ipynb (Day 2-3)
 
 | # | Task | Notebook Section |
 |---|---|---|
-| 10 | Write §1–3 (Setup, Data Loading, Feature Engineering) | §1–3 |
-| 11 | Write §4 (Regression models: Linear → XGBoost → CatBoost) | §4.1–4.8 |
-| 12 | Write §5 (Classification: idle + waste tier) | §5.1–5.3 |
-| 13 | Write §6 (K-Means clustering) | §6.1–6.6 |
+| 10 | Write §1–3 (Setup, Data Loading, Feature Engineering, save artifact) | `03a` §1–3 |
+| 11 | Implement correlation sampling + tqdm MI progress bar | `03a` §3.3 |
 
-### Phase 3: Advanced Implementation (Day 4-5)
+### Phase 3: Build 03b_tabular_models.ipynb (Day 4-5)
 
 | # | Task | Notebook Section |
 |---|---|---|
-| 14 | Write §7 (Isolation Forest anomaly detection) | §7.1–7.3 |
-| 15 | Write §8 (Timeseries: LSTM, GRU, BiGRU, CNN-LSTM) | §8.1–8.8 |
-| 16 | Write §9 (SHAP explainability) | §9.1–9.5 |
+| 12 | Write §4 (Ridge, Random Forest, XGBoost regressors) | `03b` §4.1–4.7 |
+| 13 | Write §5 (Binary + multi-class classification with RF + XGBoost) | `03b` §5.1–5.3 |
+| 14 | Write §6 (K-Means clustering) | `03b` §6.1–6.6 |
+| 15 | Write §7 (Isolation Forest with pd.Series fix) | `03b` §7.1–7.3 |
+| 16 | Write §9 (SHAP explainability) | `03b` §9.1–9.5 |
+| 17 | Write §10–11 (Comparison, conclusions) | `03b` §10–11 |
 
-### Phase 4: Synthesis & CI (Day 5-6)
+### Phase 4: Build 03c_timeseries_forecasting.ipynb (Day 5-6)
 
 | # | Task | Notebook Section |
 |---|---|---|
-| 17 | Write §10 (Model comparison, inference benchmark, business impact) | §10.1–10.4 |
-| 18 | Write §11 (Conclusions, limitations, future work) | §11.1–11.4 |
-| 19 | Run full notebook end-to-end, verify outputs | All |
+| 18 | Write §8 (DuckDB out-of-core load, per-VM sequences, ARIMA/LSTM/BiGRU/CNN-LSTM) | `03c` §8.1–8.8 |
+
+### Phase 5: Synthesis & CI (Day 6)
+
+| # | Task | Notebook Section |
+|---|---|---|
+| 19 | Run all 3 notebooks end-to-end, verify outputs | All |
 | 20 | Run `pytest app/tests/`, fix failures | Tests |
 | 21 | Commit all files, push, verify CI passes | Git |
 
