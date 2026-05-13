@@ -56,11 +56,19 @@ This is a business analytics project to analyze and predict cloud resources and 
 - Run with coverage: `pytest app/tests/ --cov=app.src`
 
 ### Linting & Formatting
-- Check PEP 8 compliance: `flake8 app/src/ --max-line-length=120`
+- Check code style: `black --check app/src/ app/tests/ && flake8 app/src/`
 - Format code: `black app/src/ app/tests/`
 
-### Notebook Execution
-- Execute notebook end-to-end: `jupyter nbconvert --to notebook --execute notebooks/03_predictive_analysis.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+### Notebook Execution (quality gates active)
+- Execute 03a: `jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+- Execute 03b: `jupyter nbconvert --to notebook --execute notebooks/03b_tabular_models.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+- Execute 03c: `jupyter nbconvert --to notebook --execute notebooks/03c_timeseries_forecasting.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+
+### Quality Insurance
+- Generate QA compliance report: `python -m app.src.qa_report`
+
+### Environment
+- Freeze exact dependencies: `pip freeze --exclude-editable > requirements.lock`
 
 ### CI/CD
-- Run full CI locally: `pytest app/tests/ -v && jupyter nbconvert --to notebook --execute notebooks/03_predictive_analysis.ipynb`
+- Run full CI locally: `pytest app/tests/ -v && jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
