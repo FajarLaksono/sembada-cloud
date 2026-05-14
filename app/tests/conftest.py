@@ -24,12 +24,13 @@ def vmtable_sample() -> pd.DataFrame:
     else:
         # Create synthetic test data
         n_samples = 1000
+        timestamps_created = np.random.randint(0, 86400 * 28, n_samples)
         return pd.DataFrame({
             'vm_id': [f'vm_{i}' for i in range(n_samples)],
             'subscription_id': [f'sub_{i % 10}' for i in range(n_samples)],
             'deployment_id': [f'dep_{i % 5}' for i in range(n_samples)],
-            'timestamp_created': np.random.randint(0, 86400 * 28, n_samples),
-            'timestamp_deleted': np.random.randint(0, 86400 * 28, n_samples) + np.random.randint(3600, 86400 * 2, n_samples),
+            'timestamp_created': timestamps_created,
+            'timestamp_deleted': timestamps_created + np.random.randint(3600, 86400 * 2, n_samples),
             'max_cpu': np.random.uniform(0, 100, n_samples),
             'avg_cpu': np.random.uniform(0, 100, n_samples),
             'p95_max_cpu': np.random.uniform(0, 100, n_samples),
