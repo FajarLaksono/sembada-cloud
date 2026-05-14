@@ -38,7 +38,7 @@ catboost>=1.2.0
 shap>=0.45.0
 
 # === Deep Learning ===
-tensorflow>=2.15.0  # Note: May require Python < 3.14
+tensorflow>=2.15.0
 
 # === Time Series ===
 statsmodels>=0.14.0

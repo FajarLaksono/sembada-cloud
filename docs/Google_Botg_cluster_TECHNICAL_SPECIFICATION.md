@@ -31,7 +31,7 @@ Sembada Cloud is a business analytics project to analyze and predict cloud resou
 - Provide actionable insights for cloud cost reduction (FinOps)
 
 ### 1.3 Tech Stack
-- **Language:** Python 3.14.x
+- **Language:** Python 3.13.x
 - **Data Access:** Google BigQuery
 - **ML Frameworks:** TensorFlow, PyTorch, scikit-learn (to be determined in Phase 3)
 - **Visualization:** Matplotlib, Seaborn, Data Studio

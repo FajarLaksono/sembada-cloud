@@ -112,7 +112,7 @@ Create all infrastructure files, modules, tests, and CI/CD pipeline.
 - [x] **.gitkeep** in `models/` directory (preserve in git)
 
 - [x] **.github/workflows/ci.yml** — GitHub Actions pipeline
-  - Python 3.14 setup
+  - Python 3.13 setup
   - Install dependencies
   - Run `pytest app/tests/ -v`
   - Execute notebook with `papermill` (real-time output via `--log-output`)
@@ -517,7 +517,7 @@ Finalize notebook, run full validation, and prepare for production.
 ### Git & CI/CD
 - [ ] Commit all files: `git add -A && git commit -m "feat: implement predictive analysis notebook"`
 - [ ] Push to branch: `git push origin feature/03-predictive-analysis`
-- [ ] Verify GitHub Actions CI passes (`test` job auto on push; `notebooks` job manual via `workflow_dispatch`)
+- [ ] Verify GitHub Actions CI passes (`ci.yml` auto on push; `notebooks.yml` manual via `workflow_dispatch`)
 - [ ] Create PR if needed
 
 ---

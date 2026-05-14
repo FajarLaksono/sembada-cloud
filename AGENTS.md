@@ -10,7 +10,7 @@ This is a business analytics project to analyze and predict cloud resources and 
 
 ## Tech stack
 
-- Python 3.14 
+- Python 3.13 
 
 ## Project Structure
 
@@ -22,7 +22,7 @@ This is a business analytics project to analyze and predict cloud resources and 
 
 ## Code Standards
 
-- Use Python 3.14.x features
+- Use Python 3.13.x features
 - Follow PEP 8 style guidelines
 - Use type hints for function signatures
 - Write docstrings for all public functions and classes
@@ -72,4 +72,4 @@ This is a business analytics project to analyze and predict cloud resources and 
 
 ### CI/CD (local)
 - Run full CI locally: `pytest app/tests/ -v && papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
-- **On GitHub CI:** `test` job runs automatically on push/PR; `notebooks` job runs on manual trigger (`workflow_dispatch`) and uploads HTML reports as artifacts
+- **On GitHub CI:** `ci.yml` runs `test` automatically on push/PR; `notebooks.yml` runs on manual trigger (`workflow_dispatch`) and uploads HTML reports as artifacts

@@ -88,7 +88,8 @@ sembada-cloud/
 │   └── timeseries/                           ← Best LSTM/GRU model
 │
 ├── .github/workflows/
-│   └── ci.yml                                ← pytest on every push/PR, notebooks manual trigger
+│   └── ci.yml                                ← pytest on every push/PR
+│   └── notebooks.yml                         ← manual trigger via workflow_dispatch
 │
 ├── docs/
 │   ├── AZURE_PREDICTIVE_ANALYSIS_PLAN.md     ← This document
@@ -169,7 +170,7 @@ from app.src.visualize import residual_plot, feature_importance_plot, cluster_sc
 | CAMS | Practice | Implementation |
 |---|---|---|
 | **Culture** | Version control, code review, peer review | Notebook + `.py` in git; PRs required for `main` |
-| **Automation** | CI/CD pipeline | GitHub Actions: `pytest` auto on push/PR, notebooks manual trigger via `workflow_dispatch` |
+| **Automation** | CI/CD pipeline | GitHub Actions: `pytest` auto on push/PR (ci.yml), notebooks manual trigger (notebooks.yml) |
 | **Measurement** | Metrics tracked and auditable | `docs/run_log.csv` records model name, date, metrics, file hash |
 | **Sharing** | Artifacts committed and accessible | Notebook, docs, model metadata committed to repo |
 
@@ -1395,7 +1396,7 @@ class TestModels:
 
 ## 7. CI/CD: GitHub Actions
 
-### `.github/workflows/ci.yml`
+### `.github/workflows/ci.yml` (test — auto on push/PR)
 
 ```yaml
 name: CI
@@ -1405,7 +1406,6 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   test:
@@ -1414,10 +1414,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies
@@ -1435,19 +1435,27 @@ jobs:
           pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term
         env:
           PYTHONPATH: ${{ github.workspace }}
+```
 
+### `.github/workflows/notebooks.yml` (notebooks — manual trigger)
+
+```yaml
+name: Notebooks
+
+on:
+  workflow_dispatch:
+
+jobs:
   notebooks:
-    if: github.event_name == 'workflow_dispatch'
-    needs: test
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies
@@ -1483,7 +1491,7 @@ jobs:
       - name: Upload reports as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ml-reports
+          name: predictive-analysis-report
           path: notebooks/*_report.html
 ```
 

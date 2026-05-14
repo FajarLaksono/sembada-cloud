@@ -133,9 +133,8 @@ All quality logic lives inside the notebooks themselves. The only external depen
                               ▼
 .github/workflows/ci.yml (un-commented)
   └─ pytest app/tests/ --cov=app.src --cov-report=term
-  └─ papermill notebooks/03a_*.ipynb NUL --log-output --progress-bar --execution-timeout 600
-  └─ papermill notebooks/03b_*.ipynb NUL --log-output --progress-bar --execution-timeout 600
-  └─ papermill notebooks/03c_*.ipynb NUL --log-output --progress-bar --execution-timeout 600
+  └─ .github/workflows/ci.yml (pytest on push/PR)
+  └─ .github/workflows/notebooks.yml (papermill on manual trigger)
 ```
 
 ---
@@ -495,6 +494,8 @@ Un-comment all lines and add the `--cov` flag for coverage reporting.
 
 ### 10.3 Final File Content
 
+**`.github/workflows/ci.yml`** (test — auto on push/PR):
+
 ```yaml
 name: CI
 
@@ -503,7 +504,6 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   test:
@@ -512,10 +512,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies
@@ -533,19 +533,27 @@ jobs:
           pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term
         env:
           PYTHONPATH: ${{ github.workspace }}
+```
 
+**`.github/workflows/notebooks.yml`** (notebooks — manual trigger):
+
+```yaml
+name: Notebooks
+
+on:
+  workflow_dispatch:
+
+jobs:
   notebooks:
-    if: github.event_name == 'workflow_dispatch'
-    needs: test
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies
@@ -581,18 +589,18 @@ jobs:
       - name: Upload reports as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ml-reports
+          name: predictive-analysis-report
           path: notebooks/*_report.html
 ```
 
 ### 10.4 Pipeline Behavior
 
-| Stage | Trigger | Purpose | On Failure |
-|-------|---------|---------|------------|
-| `test` job: `pip install` | push/PR/manual | Reproducible environment | Exits before testing |
-| `test` job: `pytest --cov` | push/PR/manual | Unit tests + coverage report | PR is blocked, test report visible |
-| `notebooks` job: `papermill` | manual only (via `workflow_dispatch`, after tests pass) | End-to-end quality gates with real-time output | `AssertionError` from failed gate; partial HTML reports still uploaded for debugging |
-| `notebooks` job: `HTML + upload` | manual only (after notebooks) | Executed notebooks converted to HTML and uploaded as artifacts | Only runs if notebooks complete; failure is non-blocking for upload |
+| Workflow | Trigger | Purpose | On Failure |
+|----------|---------|---------|------------|
+| `ci.yml` — `pip install` | push/PR | Reproducible environment | Exits before testing |
+| `ci.yml` — `pytest --cov` | push/PR | Unit tests + coverage report | PR is blocked, test report visible |
+| `notebooks.yml` — `papermill` | manual only (Actions → Notebooks → Run workflow) | End-to-end quality gates with real-time output | `AssertionError` from failed gate; partial HTML reports still uploaded for debugging |
+| `notebooks.yml` — HTML + upload | manual only (after notebooks) | Executed notebooks converted to HTML and uploaded as artifacts | Only runs if notebooks complete; failure is non-blocking |
 
 ---
 
@@ -825,7 +833,7 @@ fail_under = 70
 
 | Tool | Before | After |
 |------|--------|-------|
-| black | Ad-hoc command, default line length (88) | Config file, 120 chars, Python 3.14 syntax |
+| black | Ad-hoc command, default line length (88) | Config file, 120 chars, Python 3.13 syntax |
 | flake8 | Ad-hoc command with `--max-line-length=120` flag | Config file with black-compatible ignores |
 | pytest | No config, uses defaults | Test paths, markers, min version set |
 | coverage | No config, `--cov=app.src` flag required | Source path, exclusion rules, 70% minimum |
@@ -993,9 +1001,10 @@ papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --pr
 
 ### CI/CD
 
-- [ ] `.github/workflows/ci.yml` active — two jobs (test auto, notebooks manual)
-- [ ] `test` job runs `pytest` with `--cov` on push/PR/manual
-- [ ] `notebooks` job runs `papermill` on all 3 notebooks (manual trigger only, after tests pass, real-time output via `--log-output`)
+- [ ] `.github/workflows/ci.yml` active — test auto on push/PR
+- [ ] `.github/workflows/notebooks.yml` active — notebooks manual via `workflow_dispatch`
+- [ ] `ci.yml` runs `pytest` with `--cov` on push/PR
+- [ ] `notebooks.yml` runs `papermill` on all 3 notebooks (manual trigger, real-time output via `--log-output`)
 - [ ] Notebooks converted to HTML reports and uploaded as artifacts
 
 ### Optional
@@ -1058,6 +1067,7 @@ Replace the **Development Commands** section with:
 
 ### CI/CD
 - Run full CI locally: `pytest app/tests/ -v && papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
+- **CI pipelines:** `ci.yml` (pytest auto), `notebooks.yml` (manual via `workflow_dispatch`, uploads HTML reports as artifacts)`
 ```
 
 ---
