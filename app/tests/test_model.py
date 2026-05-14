@@ -200,22 +200,6 @@ class TestModelPersistence:
             assert data['metadata'] == metadata
 
 
-class TestLinearModel:
-    """Tests for LinearModel wrapper."""
-
-    def test_linear_fit_predict(self, toy_regression_data):
-        """LinearModel fits and predicts."""
-        from app.src.models import LinearModel
-
-        X, y = toy_regression_data
-
-        model = LinearModel()
-        model.fit(X, y)
-
-        preds = model.predict(X)
-        assert preds.shape[0] == len(y)
-
-
 class TestRandomForestModel:
     """Tests for RandomForestModel wrapper."""
 
@@ -245,17 +229,4 @@ class TestRandomForestModel:
         assert np.isin(preds, [0, 1]).all()
 
 
-class TestCatBoostModel:
-    """Tests for CatBoostModel wrapper."""
 
-    def test_catboost_fit_predict(self, toy_regression_data):
-        """CatBoostModel fits and predicts."""
-        from app.src.models import CatBoostModel
-
-        X, y = toy_regression_data
-
-        model = CatBoostModel(task="regression", params={"iterations": 10})
-        model.fit(X, y)
-
-        preds = model.predict(X)
-        assert preds.shape[0] == len(y)

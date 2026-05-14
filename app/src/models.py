@@ -248,13 +248,32 @@ class ClusterModel(BaseModel):
         """Save cluster model with scaler."""
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         save_dict = {
-            'kmeans': self.estimator,
+            'estimator': self.estimator,
             'scaler': self.scaler,
             'n_clusters': self.n_clusters,
+            'task': self.task,
+            'params': self.params,
+            'random_state': self.random_state,
             'metadata': metadata or {}
         }
         joblib.dump(save_dict, path)
         return path
+
+
+class GenericModel(BaseModel):
+    """Concrete fallback for loading unknown saved models."""
+
+    def __init__(self, task: str = "regression", params: Dict[str, Any] | None = None, random_state: int = 42):
+        super().__init__(task, params, random_state)
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        """Fit using stored estimator."""
+        self.estimator.fit(X, y)
+        self.is_fitted = True
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Predict using stored estimator."""
+        return self.estimator.predict(X)
 
 
 class AnomalyModel(BaseModel):
@@ -314,14 +333,15 @@ def load_model(path: str, model_type: str | None = None) -> BaseModel:
             model = ClusterModel(n_clusters=estimator.n_clusters)
             model.estimator = estimator
             model.scaler = data.get('scaler')
+            model.is_scaled = True
         elif isinstance(estimator, IsolationForest):
             model = AnomalyModel()
             model.estimator = estimator
         else:
             # Generic wrapper
-            model = BaseModel()
-            model.estimator = estimator
-            model.task = task
+            model = GenericModel()
+        model.estimator = estimator
+        model.task = task
 
         model.is_fitted = True
         return model
