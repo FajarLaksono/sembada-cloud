@@ -848,7 +848,9 @@ In `.github/workflows/ci.yml`, change the install step to prefer the lockfile:
 |-----------|-------------|------------|---------------|
 | `test_features.py` | `TestCreateFeatures`, `TestGetFeatureTargetColumns`, `TestCreateSequences`, `TestMultiTableFeatures` | ~15 | Feature shape, parsing, targets, sequences, multi-table joins |
 | `test_model.py` | `TestXGBoostModel`, `TestClusterModel`, `TestAnomalyModel`, `TestModelPersistence`, `TestLinearModel`, `TestRandomForestModel` | ~14 | Fit/predict, evaluate metrics, save/load, metadata |
-| **Total** | | **~29** | |
+| `test_visualize.py` | `TestResidualPlot`, `TestFeatureImportancePlot`, `TestClusterScatter`, `TestComparisonTable` | ~4 | Visualization smoke tests (return types, DataFrame shape) |
+| `test_qa_report.py` | `TestLoadRunLog`, `TestCheckModelCompliance`, `TestGenerateReport` | ~4 | QA report utility: missing file, pass/fail logic, report generation |
+| **Total** | | **~35** | |
 
 ### 14.2 Quality Gate Coverage (New)
 

@@ -20,6 +20,7 @@ models/*.csv
 
 # log files
 catboost_info/
+.coverage
 
 # Python
 __pycache__/
