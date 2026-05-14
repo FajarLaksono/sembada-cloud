@@ -134,60 +134,42 @@
       }
     }
   },
-  "command": [
-    {
-      "name": "test",
+  "command": {
+    "test": {
       "description": "Run all unit tests",
-      "prompt": "Running all unit tests...",
-      "command": "pytest app/tests/ -v"
+      "template": "pytest app/tests/ -v"
     },
-    {
-      "name": "test-file",
+    "test-file": {
       "description": "Run a specific test file",
-      "prompt": "Running tests in {file}...",
-      "command": "pytest app/tests/{file} -v"
+      "template": "pytest app/tests/{file} -v"
     },
-    {
-      "name": "lint",
+    "lint": {
       "description": "Check code style",
-      "prompt": "Checking code style...",
-      "command": "black --check app/src/ app/tests/ && flake8 app/src/"
+      "template": "black --check app/src/ app/tests/ && flake8 app/src/"
     },
-    {
-      "name": "format",
+    "format": {
       "description": "Format code with black",
-      "prompt": "Formatting code...",
-      "command": "black app/src/ app/tests/"
+      "template": "black app/src/ app/tests/"
     },
-    {
-      "name": "qa",
+    "qa": {
       "description": "Generate QA compliance report",
-      "prompt": "Generating QA report...",
-      "command": "python -m app.src.qa_report"
+      "template": "python -m app.src.qa_report"
     },
-    {
-      "name": "notebook-03a",
+    "notebook-03a": {
       "description": "Execute feature engineering notebook (local only)",
-      "prompt": "Executing 03a_feature_engineering...",
-      "command": "papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600"
+      "template": "papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600"
     },
-    {
-      "name": "notebook-03b",
+    "notebook-03b": {
       "description": "Execute tabular models notebook (local only)",
-      "prompt": "Executing 03b_tabular_models...",
-      "command": "papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600"
+      "template": "papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600"
     },
-    {
-      "name": "notebook-03c",
+    "notebook-03c": {
       "description": "Execute timeseries notebook (local only)",
-      "prompt": "Executing 03c_timeseries_forecasting...",
-      "command": "papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600"
+      "template": "papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600"
     },
-    {
-      "name": "ci-local",
+    "ci-local": {
       "description": "Run full CI locally (tests + QA)",
-      "prompt": "Running local CI pipeline...",
-      "command": "pytest app/tests/ -v && python -m app.src.qa_report"
+      "template": "pytest app/tests/ -v && python -m app.src.qa_report"
     }
-  ]
+  }
 }
