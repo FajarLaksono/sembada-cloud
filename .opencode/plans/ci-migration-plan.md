@@ -1,134 +1,45 @@
-# Implementation Plan: CI Notebook Execution with Real-Time Output & Artifact Reports
+# Final Plan: CI, Data Strategy, and Notebook Execution
 
-## 1. Workflow Files
+## Changes Applied
 
-Two separate workflow files — no ghost checks on PRs.
+### 1. Synthetic Fixtures (conftest.py)
 
-### `.github/workflows/ci.yml` (test — auto on push/PR)
+All 3 auxiliary fixtures now generate synthetic data when parquet files are missing:
+- `pricing_sample` — cartesian product of core/mem buckets with rate_per_hour
+- `subscriptions_sample` — 10 subscription IDs matching vmtable_sample
+- `deployments_sample` — 5 deployment IDs matching vmtable_sample
 
-```yaml
-name: CI
+Tests pass without any real data files.
 
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+### 2. CI Architecture
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
+Single workflow `.github/workflows/ci.yml` — pytest only, auto on push/PR:
+- All fixtures are synthetic — no real data needed
+- Fast (~1 min)
+- Clean status checks (no ghost jobs)
 
-    steps:
-      - uses: actions/checkout@v4
+### 3. `notebooks.yml` — DELETED
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: "pip"
+No CI notebook execution. Notebooks run locally only. Quality gates are embedded in the notebooks and fire identically regardless of environment.
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.lock ]; then
-            pip install -r requirements.lock
-          else
-            pip install -r requirements.txt
-          fi
-          pip install pytest coverage
+### 4. Limitations Documented
 
-      - name: Run unit tests with coverage
-        run: |
-          pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-```
+Added to `docs/AZURE_PREDICTIVE_ANALYSIS_PLAN.md` §7.1:
+- 100GB CPU readings cannot fit CI
+- Notebooks local-only
+- Compliance preserved (gates in notebook, `run_log.csv`, documented commands)
+- Full automation tracked as future work
 
-### `.github/workflows/notebooks.yml` (notebooks — manual trigger)
-
-```yaml
-name: Notebooks
-
-on:
-  workflow_dispatch:
-
-jobs:
-  notebooks:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.lock ]; then
-            pip install -r requirements.lock
-          else
-            pip install -r requirements.txt
-          fi
-          pip install papermill jupyter nbformat
-
-      - name: Execute notebooks (quality gates active)
-        run: |
-          papermill notebooks/03a_feature_engineering.ipynb notebooks/03a_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-          papermill notebooks/03b_tabular_models.ipynb notebooks/03b_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-          papermill notebooks/03c_timeseries_forecasting.ipynb notebooks/03c_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      - name: Convert to HTML reports
-        run: |
-          jupyter nbconvert --to html notebooks/03a_output.ipynb \
-            --output 03a_report.html --TemplateExporter.exclude_input=True
-          jupyter nbconvert --to html notebooks/03b_output.ipynb \
-            --output 03b_report.html --TemplateExporter.exclude_input=True
-          jupyter nbconvert --to html notebooks/03c_output.ipynb \
-            --output 03c_report.html --TemplateExporter.exclude_input=True
-
-      - name: Upload reports as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: predictive-analysis-report
-          path: notebooks/*_report.html
-```
-
-## 2. Files Updated
+## Files Updated
 
 | File | Change |
 |------|--------|
-| `.github/workflows/ci.yml` | Rewritten — test only, auto on push/PR, no notebooks job |
-| `.github/workflows/notebooks.yml` | **New** — notebooks + HTML + artifact upload, manual only |
-| `requirements.txt` | Added `papermill>=2.6.0` |
-| `AGENTS.md` | 3 papermill execute commands + CI/CD section |
-| `docs/RUNNING.md` | CI/CD section split into two workflows |
-| `docs/AZURE_PREDICTIVE_ANALYSIS_PLAN.md` | §7 YAMLs, architecture diagram, automation table |
-| `docs/AUTOMATED_QA_TECH_SPEC.md` | §10 YAMLs, pipeline behavior table, CI checklist, AGENTS.md section |
-| `docs/IMPLEMENTATION_PROGRESS.md` | CI checklist item |
+| `.github/workflows/ci.yml` | **No change** (already correct — test only) |
+| `.github/workflows/notebooks.yml` | **Deleted** |
+| `app/tests/conftest.py` | Synthetic fallbacks for pricing, subscriptions, deployments |
+| `AGENTS.md` | CI/CD section simplified |
+| `docs/RUNNING.md` | CI/CD section simplified to single workflow |
+| `docs/AZURE_PREDICTIVE_ANALYSIS_PLAN.md` | Removed notebooks.yml refs; added §7.1 Limitations |
+| `docs/AUTOMATED_QA_TECH_SPEC.md` | Removed notebooks.yml YAML; simplified Out of Scope §1.3, Pipeline Behavior §10.4, checklist, AGENTS.md section |
+| `docs/IMPLEMENTATION_PROGRESS.md` | CI checklist item updated |
 | `.opencode/plans/ci-migration-plan.md` | This file |
-
-## 3. How to Trigger Notebooks
-
-1. GitHub → **Actions** tab → **Notebooks** workflow
-2. Click **Run workflow** → select branch → **Run**
-3. During execution: real-time cell output visible in the step log
-4. When done: download `predictive-analysis-report.zip` from **Artifacts**
-5. Open HTML files in browser — all graphs rendered inline
-
-## 4. Expected Behavior
-
-| Event | ci.yml | notebooks.yml |
-|-------|--------|---------------|
-| Push to main/develop | ✅ pytest runs | ❌ not triggered |
-| PR to main | ✅ pytest runs | ❌ not triggered |
-| Manual trigger (Actions → Notebooks) | ❌ not triggered | ✅ full notebook execution → HTML → artifacts |

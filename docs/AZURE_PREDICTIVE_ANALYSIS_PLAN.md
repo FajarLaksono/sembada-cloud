@@ -89,7 +89,6 @@ sembada-cloud/
 │
 ├── .github/workflows/
 │   └── ci.yml                                ← pytest on every push/PR
-│   └── notebooks.yml                         ← manual trigger via workflow_dispatch
 │
 ├── docs/
 │   ├── AZURE_PREDICTIVE_ANALYSIS_PLAN.md     ← This document
@@ -170,7 +169,7 @@ from app.src.visualize import residual_plot, feature_importance_plot, cluster_sc
 | CAMS | Practice | Implementation |
 |---|---|---|
 | **Culture** | Version control, code review, peer review | Notebook + `.py` in git; PRs required for `main` |
-| **Automation** | CI/CD pipeline | GitHub Actions: `pytest` auto on push/PR (ci.yml), notebooks manual trigger (notebooks.yml) |
+| **Automation** | CI/CD pipeline | GitHub Actions: `pytest` auto on push/PR (ci.yml). Notebooks run locally (see Limitations §7.1). |
 | **Measurement** | Metrics tracked and auditable | `docs/run_log.csv` records model name, date, metrics, file hash |
 | **Sharing** | Artifacts committed and accessible | Notebook, docs, model metadata committed to repo |
 
@@ -1437,65 +1436,19 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
 ```
 
-### `.github/workflows/notebooks.yml` (notebooks — manual trigger)
+### 7.1 Limitations
 
-```yaml
-name: Notebooks
+**CI Data Limitation:** The Azure Public Dataset V2 CPU readings are ~100GB across 195 shards. Due to this size, full notebook execution with quality gates is limited to local environments where the complete dataset resides. CI (`ci.yml`) runs unit tests only using lightweight synthetic fixtures — notebook execution is done locally via `papermill` commands documented in `AGENTS.md`. This tradeoff is acceptable because:
 
-on:
-  workflow_dispatch:
+- Quality gate assertions (data quality, feature validation, model acceptance) are embedded in the notebooks themselves and fire identically regardless of execution environment
+- The same `papermill --log-output` command is used both locally and would be in CI — the only difference is who presses the button
+- CRISP-ML(Q) and CAMS compliance is preserved: quality gates exist, metrics are tracked via `run_log.csv`, and execution is documented and repeatable
 
-jobs:
-  notebooks:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.lock ]; then
-            pip install -r requirements.lock
-          else
-            pip install -r requirements.txt
-          fi
-          pip install papermill jupyter nbformat
-
-      - name: Execute notebooks (quality gates active)
-        run: |
-          papermill notebooks/03a_feature_engineering.ipynb notebooks/03a_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-          papermill notebooks/03b_tabular_models.ipynb notebooks/03b_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-          papermill notebooks/03c_timeseries_forecasting.ipynb notebooks/03c_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      - name: Convert to HTML reports
-        run: |
-          jupyter nbconvert --to html notebooks/03a_output.ipynb \
-            --output 03a_report.html --TemplateExporter.exclude_input=True
-          jupyter nbconvert --to html notebooks/03b_output.ipynb \
-            --output 03b_report.html --TemplateExporter.exclude_input=True
-          jupyter nbconvert --to html notebooks/03c_output.ipynb \
-            --output 03c_report.html --TemplateExporter.exclude_input=True
-
-      - name: Upload reports as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: predictive-analysis-report
-          path: notebooks/*_report.html
-```
+Full CI/CD automation of the ML pipeline would require either a self-hosted runner with attached storage or a data reduction strategy (e.g., representative sample shard) — tracked as future work.
 
 ---
+
+**Next:** [8. Dependencies: requirements.txt](#8-dependencies-requirementstxt)
 
 ## 8. Dependencies: requirements.txt
 

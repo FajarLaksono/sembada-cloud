@@ -46,6 +46,7 @@ The scope covers 10 concrete actions across three notebooks (`03a`, `03b`, `03c`
 - Real-time model monitoring (data drift detection, model decay alerts)
 - Automated retraining pipeline
 - Multi-cloud data integration
+- Full CI notebook execution — the VM CPU readings dataset is ~100GB (195+ parquet shards), making CI execution impractical. Notebooks run locally on the full dataset; CI runs unit tests only via synthetic fixtures (see §10.4).
 
 ### 1.4 CRISP-ML(Q) Quality Assurance Principles Applied
 
@@ -535,72 +536,15 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
 ```
 
-**`.github/workflows/notebooks.yml`** (notebooks — manual trigger):
+### 10.4 CI Limitations
 
-```yaml
-name: Notebooks
+Notebook execution is deliberately excluded from CI due to the ~100GB VM CPU readings dataset. Unit tests (`ci.yml`) run automatically on push/PR using **synthetic fixtures** — no real data needed. Notebooks execute locally via `papermill --log-output` (commands in `AGENTS.md`). Quality gates are embedded in the notebooks and fire identically regardless of execution environment.
 
-on:
-  workflow_dispatch:
-
-jobs:
-  notebooks:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.lock ]; then
-            pip install -r requirements.lock
-          else
-            pip install -r requirements.txt
-          fi
-          pip install papermill jupyter nbformat
-
-      - name: Execute notebooks (quality gates active)
-        run: |
-          papermill notebooks/03a_feature_engineering.ipynb notebooks/03a_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-          papermill notebooks/03b_tabular_models.ipynb notebooks/03b_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-          papermill notebooks/03c_timeseries_forecasting.ipynb notebooks/03c_output.ipynb \
-            --log-output --progress-bar --execution-timeout 600
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      - name: Convert to HTML reports
-        run: |
-          jupyter nbconvert --to html notebooks/03a_output.ipynb \
-            --output 03a_report.html --TemplateExporter.exclude_input=True
-          jupyter nbconvert --to html notebooks/03b_output.ipynb \
-            --output 03b_report.html --TemplateExporter.exclude_input=True
-          jupyter nbconvert --to html notebooks/03c_output.ipynb \
-            --output 03c_report.html --TemplateExporter.exclude_input=True
-
-      - name: Upload reports as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: predictive-analysis-report
-          path: notebooks/*_report.html
-```
-
-### 10.4 Pipeline Behavior
-
-| Workflow | Trigger | Purpose | On Failure |
-|----------|---------|---------|------------|
+| Stage | Trigger | Purpose | On Failure |
+|-------|---------|---------|------------|
 | `ci.yml` — `pip install` | push/PR | Reproducible environment | Exits before testing |
-| `ci.yml` — `pytest --cov` | push/PR | Unit tests + coverage report | PR is blocked, test report visible |
-| `notebooks.yml` — `papermill` | manual only (Actions → Notebooks → Run workflow) | End-to-end quality gates with real-time output | `AssertionError` from failed gate; partial HTML reports still uploaded for debugging |
-| `notebooks.yml` — HTML + upload | manual only (after notebooks) | Executed notebooks converted to HTML and uploaded as artifacts | Only runs if notebooks complete; failure is non-blocking |
+| `ci.yml` — `pytest --cov` | push/PR | Unit tests + coverage report (synthetic fixtures) | PR is blocked, test report visible |
+| Local `papermill` | Manual | Notebooks with quality gates (full dataset) | `AssertionError` from failed gate |
 
 ---
 
@@ -1002,10 +946,8 @@ papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --pr
 ### CI/CD
 
 - [ ] `.github/workflows/ci.yml` active — test auto on push/PR
-- [ ] `.github/workflows/notebooks.yml` active — notebooks manual via `workflow_dispatch`
-- [ ] `ci.yml` runs `pytest` with `--cov` on push/PR
-- [ ] `notebooks.yml` runs `papermill` on all 3 notebooks (manual trigger, real-time output via `--log-output`)
-- [ ] Notebooks converted to HTML reports and uploaded as artifacts
+- [ ] `.github/workflows/ci.yml` active — pytest on push/PR
+- [ ] Notebooks run locally via `papermill --log-output` (documented in AGENTS.md)
 
 ### Optional
 
@@ -1067,7 +1009,7 @@ Replace the **Development Commands** section with:
 
 ### CI/CD
 - Run full CI locally: `pytest app/tests/ -v && papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
-- **CI pipelines:** `ci.yml` (pytest auto), `notebooks.yml` (manual via `workflow_dispatch`, uploads HTML reports as artifacts)`
+- **CI pipeline:** `ci.yml` runs pytest on push/PR. Notebooks run locally (full dataset ~100GB cannot fit CI).`
 ```
 
 ---
@@ -1094,5 +1036,5 @@ Replace the **Development Commands** section with:
 | Classification F1 > 0.85 | Plan §1 | Assertion in 03b §5.3 | Yes |
 | All models pass thresholds | Project policy | Assertion in 03b §4.8 + §5.3 | Yes |
 | Unit tests pass | CRISP-ML(Q) §4 | pytest CI stage | Yes |
-| Notebooks execute cleanly | CRISP-ML(Q) §5 | papermill CI stage | Yes |
+| Notebooks execute cleanly | CRISP-ML(Q) §5 | Local `papermill` execution | Yes (documented, repeatable) |
 | Model metrics auditable | CAMS: Measurement | run_log.csv | Yes (git-tracked) |

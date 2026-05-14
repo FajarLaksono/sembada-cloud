@@ -112,21 +112,13 @@ Both tools use configuration from `pyproject.toml` (line-length=120, Python 3.13
 
 ## CI/CD Pipeline
 
-Two separate workflows:
+`.github/workflows/ci.yml` runs on push to `main`/`develop` and PRs to `main`:
 
-### `ci.yml` — unit tests (auto)
-Triggers on push to `main`/`develop` and PRs to `main`:
-
-1. **Setup** — Python 3.13 with pip cache
+1. **Setup** — Python 3.14 with pip cache
 2. **Install** — `requirements.lock` if present, else `requirements.txt`
-3. **Unit tests** — `pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term`
+3. **Unit tests** — `pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term` (all fixtures synthetic — no real data needed)
 
-### `notebooks.yml` — notebooks + HTML reports (manual)
-Triggers via **GitHub UI → Actions → Notebooks → Run workflow**:
-
-4. **Execute notebooks** — `papermill` on all 3 notebooks with `--log-output` for real-time progress
-5. **Convert to HTML** — `nbconvert --to html` with inline graphs (SHAP plots, confusion matrices, forecast charts)
-6. **Upload artifacts** — Download `predictive-analysis-report.zip` from the Actions run page; open HTML in any browser
+**Notebook execution is local only.** The VM CPU readings dataset is ~100GB and cannot fit in CI. Notebooks are executed manually via `papermill` commands documented in `AGENTS.md`. Quality gates are embedded in the notebooks and fire identically regardless of environment.
 
 ### Run full CI locally
 ```powershell

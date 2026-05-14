@@ -517,7 +517,7 @@ Finalize notebook, run full validation, and prepare for production.
 ### Git & CI/CD
 - [ ] Commit all files: `git add -A && git commit -m "feat: implement predictive analysis notebook"`
 - [ ] Push to branch: `git push origin feature/03-predictive-analysis`
-- [ ] Verify GitHub Actions CI passes (`ci.yml` auto on push; `notebooks.yml` manual via `workflow_dispatch`)
+- [ ] Verify GitHub Actions CI passes (`ci.yml` auto on push; notebooks run locally)
 - [ ] Create PR if needed
 
 ---

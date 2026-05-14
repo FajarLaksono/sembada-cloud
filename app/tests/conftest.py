@@ -40,24 +40,50 @@ def vmtable_sample() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def pricing_sample() -> pd.DataFrame | None:
-    """Load pricing data for testing. Returns None if file missing."""
+def pricing_sample() -> pd.DataFrame:
+    """Load pricing data for testing. Generates synthetic data if file missing."""
     path = DATA_DIR / "azure_pricing.parquet"
-    return pd.read_parquet(path) if path.exists() else None
+    if path.exists():
+        return pd.read_parquet(path)
+    rng = np.random.default_rng(42)
+    core_buckets = ['2', '4', '8', '24', '>24']
+    mem_buckets = ['4', '8', '32', '64', '>64']
+    rows = []
+    for c in core_buckets:
+        for m in mem_buckets:
+            rows.append({
+                'core_bucket': c,
+                'mem_bucket': m,
+                'rate_per_hour': round(float(rng.uniform(0.02, 0.50)), 4),
+            })
+    return pd.DataFrame(rows)
 
 
 @pytest.fixture(scope="session")
-def subscriptions_sample() -> pd.DataFrame | None:
-    """Load subscriptions data for testing."""
+def subscriptions_sample() -> pd.DataFrame:
+    """Load subscriptions data for testing. Generates synthetic data if file missing."""
     path = DATA_DIR / "subscriptions.parquet"
-    return pd.read_parquet(path) if path.exists() else None
+    if path.exists():
+        return pd.read_parquet(path)
+    rng = np.random.default_rng(42)
+    return pd.DataFrame({
+        'subscription_id': [f'sub_{i}' for i in range(10)],
+        'vm_count': rng.integers(50, 200, 10),
+        'first_vm_timestamp': rng.integers(0, 86400 * 30, 10),
+    })
 
 
 @pytest.fixture(scope="session")
-def deployments_sample() -> pd.DataFrame | None:
-    """Load deployments data for testing."""
+def deployments_sample() -> pd.DataFrame:
+    """Load deployments data for testing. Generates synthetic data if file missing."""
     path = DATA_DIR / "deployments.parquet"
-    return pd.read_parquet(path) if path.exists() else None
+    if path.exists():
+        return pd.read_parquet(path)
+    rng = np.random.default_rng(42)
+    return pd.DataFrame({
+        'deployment_id': [f'dep_{i}' for i in range(5)],
+        'deployment_size': rng.choice(['small', 'medium', 'large'], 5),
+    })
 
 
 @pytest.fixture(scope="session")

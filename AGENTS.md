@@ -72,4 +72,4 @@ This is a business analytics project to analyze and predict cloud resources and 
 
 ### CI/CD (local)
 - Run full CI locally: `pytest app/tests/ -v && papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
-- **On GitHub CI:** `ci.yml` runs `test` automatically on push/PR; `notebooks.yml` runs on manual trigger (`workflow_dispatch`) and uploads HTML reports as artifacts
+- **On GitHub CI:** `ci.yml` runs `test` automatically on push/PR (synthetic fixtures). Notebooks run locally (100GB CPU readings cannot fit in CI).
