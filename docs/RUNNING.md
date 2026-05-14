@@ -112,14 +112,23 @@ Both tools use configuration from `pyproject.toml` (line-length=120, Python 3.14
 
 ## CI/CD Pipeline
 
-`.github/workflows/ci.yml` runs on push to `main`/`develop` and PRs to `main`:
+`.github/workflows/ci.yml` has two sequential jobs:
+
+### `test` job — runs automatically
+Triggers on push to `main`/`develop` and PRs to `main`:
 
 1. **Setup** — Python 3.14 with pip cache
 2. **Install** — `requirements.lock` if present, else `requirements.txt`
 3. **Unit tests** — `pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term`
-4. **Quality gates** — `papermill` execution on all 3 notebooks (600s timeout, `--log-output` for real-time progress)
 
-Run full CI locally:
+### `notebooks` job — manual only
+Triggers via **GitHub UI → Actions → CI → Run workflow** (`workflow_dispatch`). Runs only after `test` job passes.
+
+4. **Execute notebooks** — `papermill` on all 3 notebooks with `--log-output` for real-time progress
+5. **Convert to HTML** — `nbconvert --to html` with inline graphs (SHAP plots, confusion matrices, forecast charts)
+6. **Upload artifacts** — Download `ml-reports.zip` from the Actions run page; open HTML in any browser
+
+### Run full CI locally
 ```powershell
 pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term; if ($?) { papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600 }
 ```

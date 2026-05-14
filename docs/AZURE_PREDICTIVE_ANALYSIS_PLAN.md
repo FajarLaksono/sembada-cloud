@@ -88,7 +88,7 @@ sembada-cloud/
 │   └── timeseries/                           ← Best LSTM/GRU model
 │
 ├── .github/workflows/
-│   └── ci.yml                                ← pytest + nbconvert --execute on every PR
+│   └── ci.yml                                ← pytest on every push/PR, notebooks manual trigger
 │
 ├── docs/
 │   ├── AZURE_PREDICTIVE_ANALYSIS_PLAN.md     ← This document
@@ -169,7 +169,7 @@ from app.src.visualize import residual_plot, feature_importance_plot, cluster_sc
 | CAMS | Practice | Implementation |
 |---|---|---|
 | **Culture** | Version control, code review, peer review | Notebook + `.py` in git; PRs required for `main` |
-| **Automation** | CI/CD pipeline | GitHub Actions: run `pytest` + `nbconvert --execute` |
+| **Automation** | CI/CD pipeline | GitHub Actions: `pytest` auto on push/PR, notebooks manual trigger via `workflow_dispatch` |
 | **Measurement** | Metrics tracked and auditable | `docs/run_log.csv` records model name, date, metrics, file hash |
 | **Sharing** | Artifacts committed and accessible | Notebook, docs, model metadata committed to repo |
 
@@ -1405,6 +1405,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -1422,26 +1423,68 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest nbconvert jupyter
+          if [ -f requirements.lock ]; then
+            pip install -r requirements.lock
+          else
+            pip install -r requirements.txt
+          fi
+          pip install pytest coverage
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         run: |
-          pytest app/tests/ -v --tb=short -x
+          pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term
         env:
           PYTHONPATH: ${{ github.workspace }}
 
-      - name: Verify notebooks execute
+  notebooks:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install dependencies
         run: |
-          for nb in notebooks/03a_*.ipynb notebooks/03b_*.ipynb notebooks/03c_*.ipynb; do
-            echo "Executing $nb..."
-            jupyter nbconvert --to notebook \
-              --execute "$nb" \
-              --output /dev/null \
-              --ExecutePreprocessor.timeout=600
-          done
+          python -m pip install --upgrade pip
+          if [ -f requirements.lock ]; then
+            pip install -r requirements.lock
+          else
+            pip install -r requirements.txt
+          fi
+          pip install papermill jupyter nbformat
+
+      - name: Execute notebooks (quality gates active)
+        run: |
+          papermill notebooks/03a_feature_engineering.ipynb notebooks/03a_output.ipynb \
+            --log-output --progress-bar --execution-timeout 600
+          papermill notebooks/03b_tabular_models.ipynb notebooks/03b_output.ipynb \
+            --log-output --progress-bar --execution-timeout 600
+          papermill notebooks/03c_timeseries_forecasting.ipynb notebooks/03c_output.ipynb \
+            --log-output --progress-bar --execution-timeout 600
         env:
           PYTHONPATH: ${{ github.workspace }}
+
+      - name: Convert to HTML reports
+        run: |
+          jupyter nbconvert --to html notebooks/03a_output.ipynb \
+            --output 03a_report.html --TemplateExporter.exclude_input=True
+          jupyter nbconvert --to html notebooks/03b_output.ipynb \
+            --output 03b_report.html --TemplateExporter.exclude_input=True
+          jupyter nbconvert --to html notebooks/03c_output.ipynb \
+            --output 03c_report.html --TemplateExporter.exclude_input=True
+
+      - name: Upload reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-reports
+          path: notebooks/*_report.html
 ```
 
 ---

@@ -70,5 +70,6 @@ This is a business analytics project to analyze and predict cloud resources and 
 ### Environment
 - Freeze exact dependencies: `pip freeze --exclude-editable > requirements.lock`
 
-### CI/CD
+### CI/CD (local)
 - Run full CI locally: `pytest app/tests/ -v && papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
+- **On GitHub CI:** `test` job runs automatically on push/PR; `notebooks` job runs on manual trigger (`workflow_dispatch`) and uploads HTML reports as artifacts

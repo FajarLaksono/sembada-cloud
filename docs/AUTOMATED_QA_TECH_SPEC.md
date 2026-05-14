@@ -503,6 +503,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -520,8 +521,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest papermill jupyter nbformat
+          if [ -f requirements.lock ]; then
+            pip install -r requirements.lock
+          else
+            pip install -r requirements.txt
+          fi
+          pip install pytest coverage
 
       - name: Run unit tests with coverage
         run: |
@@ -529,23 +534,65 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
-      - name: Verify notebooks execute (quality gates active)
+  notebooks:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install dependencies
         run: |
-          for nb in notebooks/03a_*.ipynb notebooks/03b_*.ipynb notebooks/03c_*.ipynb; do
-            echo "Executing $nb..."
-            papermill "$nb" /dev/null --log-output --progress-bar --execution-timeout 600
-          done
+          python -m pip install --upgrade pip
+          if [ -f requirements.lock ]; then
+            pip install -r requirements.lock
+          else
+            pip install -r requirements.txt
+          fi
+          pip install papermill jupyter nbformat
+
+      - name: Execute notebooks (quality gates active)
+        run: |
+          papermill notebooks/03a_feature_engineering.ipynb notebooks/03a_output.ipynb \
+            --log-output --progress-bar --execution-timeout 600
+          papermill notebooks/03b_tabular_models.ipynb notebooks/03b_output.ipynb \
+            --log-output --progress-bar --execution-timeout 600
+          papermill notebooks/03c_timeseries_forecasting.ipynb notebooks/03c_output.ipynb \
+            --log-output --progress-bar --execution-timeout 600
         env:
           PYTHONPATH: ${{ github.workspace }}
+
+      - name: Convert to HTML reports
+        run: |
+          jupyter nbconvert --to html notebooks/03a_output.ipynb \
+            --output 03a_report.html --TemplateExporter.exclude_input=True
+          jupyter nbconvert --to html notebooks/03b_output.ipynb \
+            --output 03b_report.html --TemplateExporter.exclude_input=True
+          jupyter nbconvert --to html notebooks/03c_output.ipynb \
+            --output 03c_report.html --TemplateExporter.exclude_input=True
+
+      - name: Upload reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-reports
+          path: notebooks/*_report.html
 ```
 
 ### 10.4 Pipeline Behavior
 
-| Stage | Purpose | On Failure |
-|-------|---------|------------|
-| `pip install` | Reproducible environment | Exits before testing |
-| `pytest --cov` | Unit tests + coverage report | PR is blocked, test report visible |
-| `papermill --log-output` | End-to-end quality gates | PR is blocked with `AssertionError` from failing gate |
+| Stage | Trigger | Purpose | On Failure |
+|-------|---------|---------|------------|
+| `test` job: `pip install` | push/PR/manual | Reproducible environment | Exits before testing |
+| `test` job: `pytest --cov` | push/PR/manual | Unit tests + coverage report | PR is blocked, test report visible |
+| `notebooks` job: `papermill` | manual only (via `workflow_dispatch`, after tests pass) | End-to-end quality gates with real-time output | `AssertionError` from failed gate; partial HTML reports still uploaded for debugging |
+| `notebooks` job: `HTML + upload` | manual only (after notebooks) | Executed notebooks converted to HTML and uploaded as artifacts | Only runs if notebooks complete; failure is non-blocking for upload |
 
 ---
 
@@ -946,9 +993,10 @@ papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --pr
 
 ### CI/CD
 
-- [ ] `.github/workflows/ci.yml` un-commented and active
-- [ ] Pipeline runs `pytest` with `--cov`
-- [ ] Pipeline runs `papermill` on all 3 notebooks (real-time output via `--log-output`)
+- [ ] `.github/workflows/ci.yml` active — two jobs (test auto, notebooks manual)
+- [ ] `test` job runs `pytest` with `--cov` on push/PR/manual
+- [ ] `notebooks` job runs `papermill` on all 3 notebooks (manual trigger only, after tests pass, real-time output via `--log-output`)
+- [ ] Notebooks converted to HTML reports and uploaded as artifacts
 
 ### Optional
 
