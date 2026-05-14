@@ -1,0 +1,193 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "share": "disabled",
+  "snapshot": false,
+  "autoupdate": true,
+  "server": {
+    "port": 4096,
+    "hostname": "0.0.0.0",
+    "mdns": true,
+    "mdnsDomain": "myproject.local",
+    "cors": ["http://localhost:5173"]
+  },
+  "lsp": true,
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "timeout": 10000
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 10000
+  },
+  "watcher": {
+    "ignore": ["node_modules/**", "dist/**", ".git/**"]
+  },
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.env.example": "allow"
+    },
+    "bash": {
+      "*": "ask",
+      "git *": "allow",
+      "pytest *": "allow",
+      "black *": "allow",
+      "python -m app.src.*": "ask",
+      "python -m app.src.qa_report": "allow"
+    },
+    "edit": "ask",
+    "webfetch": "ask",
+    "websearch": "ask",
+    "external_directory": "deny"
+  },
+  "agent": {
+    "build": {
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow",
+          "**/*credential*": "deny",
+          "**/*secret*": "deny",
+          "**/*.pem": "deny",
+          "**/*.key": "deny",
+          "**/*password*": "deny",
+          "**/*token*": "deny"
+        },
+        "external_directory": "deny"
+      }
+    },
+    "plan": {
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow",
+          "**/*credential*": "deny",
+          "**/*secret*": "deny",
+          "**/*.pem": "deny",
+          "**/*.key": "deny",
+          "**/*password*": "deny",
+          "**/*token*": "deny"
+        },
+        "external_directory": "deny"
+      }
+    },
+    "explore": {
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow",
+          "**/*credential*": "deny",
+          "**/*secret*": "deny",
+          "**/*.pem": "deny",
+          "**/*.key": "deny",
+          "**/*password*": "deny",
+          "**/*token*": "deny"
+        },
+        "external_directory": "deny"
+      }
+    },
+    "general": {
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow",
+          "**/*credential*": "deny",
+          "**/*secret*": "deny",
+          "**/*.pem": "deny",
+          "**/*.key": "deny",
+          "**/*password*": "deny",
+          "**/*token*": "deny"
+        },
+        "external_directory": "deny"
+      }
+    },
+    "scout": {
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow",
+          "**/*credential*": "deny",
+          "**/*secret*": "deny",
+          "**/*.pem": "deny",
+          "**/*.key": "deny",
+          "**/*password*": "deny",
+          "**/*token*": "deny"
+        },
+        "external_directory": "deny"
+      }
+    }
+  },
+  "command": [
+    {
+      "name": "test",
+      "description": "Run all unit tests",
+      "prompt": "Running all unit tests...",
+      "command": "pytest app/tests/ -v"
+    },
+    {
+      "name": "test-file",
+      "description": "Run a specific test file",
+      "prompt": "Running tests in {file}...",
+      "command": "pytest app/tests/{file} -v"
+    },
+    {
+      "name": "lint",
+      "description": "Check code style",
+      "prompt": "Checking code style...",
+      "command": "black --check app/src/ app/tests/ && flake8 app/src/"
+    },
+    {
+      "name": "format",
+      "description": "Format code with black",
+      "prompt": "Formatting code...",
+      "command": "black app/src/ app/tests/"
+    },
+    {
+      "name": "qa",
+      "description": "Generate QA compliance report",
+      "prompt": "Generating QA report...",
+      "command": "python -m app.src.qa_report"
+    },
+    {
+      "name": "notebook-03a",
+      "description": "Execute feature engineering notebook (local only)",
+      "prompt": "Executing 03a_feature_engineering...",
+      "command": "papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600"
+    },
+    {
+      "name": "notebook-03b",
+      "description": "Execute tabular models notebook (local only)",
+      "prompt": "Executing 03b_tabular_models...",
+      "command": "papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600"
+    },
+    {
+      "name": "notebook-03c",
+      "description": "Execute timeseries notebook (local only)",
+      "prompt": "Executing 03c_timeseries_forecasting...",
+      "command": "papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600"
+    },
+    {
+      "name": "ci-local",
+      "description": "Run full CI locally (tests + QA)",
+      "prompt": "Running local CI pipeline...",
+      "command": "pytest app/tests/ -v && python -m app.src.qa_report"
+    }
+  ]
+}

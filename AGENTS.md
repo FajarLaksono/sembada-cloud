@@ -2,15 +2,52 @@
 
 ## What this project does
 
-This is a business analytics project to analyze and predict cloud resources and costs with machine learning and deep learning. complied to CRISP-ML(Q) and CAMS DevOps. 
+This is a business analytics project to analyze and predict cloud resources and costs with machine learning and deep learning. complied to CRISP-ML(Q) and CAMS DevOps.
+
+## AI Engineering Setup
+
+This project uses opencode for AI-assisted development. Configuration is in
+`opencode.json` (project root) and `.opencode/` directory. See
+`docs/AI_ENGINEERING_SPEC.md` for the full spec.
+
+### Agents
+
+| Agent | Usage |
+|-------|-------|
+| `build` (default) | Active development — full edit/bash access |
+| `plan` (Tab key) | Planning and analysis — read-only |
+| `@explore` | Fast codebase search — read-only |
+| `@general` | Complex research and multi-step tasks |
+| `@scout` | External dependency research |
+| `@SupportEngineer` | Debugging and root cause analysis |
+
+### Custom Commands (in TUI, type `/command`)
+
+| Command | Action |
+|---------|--------|
+| `/test` | `pytest app/tests/ -v` |
+| `/test-file {file}` | Run a specific test file |
+| `/lint` | Check code style (black + flake8) |
+| `/format` | Format code with black |
+| `/qa` | Generate QA compliance report |
+| `/notebook-03a` | Execute feature engineering notebook |
+| `/notebook-03b` | Execute tabular models notebook |
+| `/notebook-03c` | Execute timeseries forecasting notebook |
+| `/ci-local` | Run tests + QA locally |
+
+### Skills (loaded on-demand by agents)
+
+- `root-cause-analysis` — RCA methodology (used by @SupportEngineer)
+- `feature-engineering` — Feature engineering rules for VM trace data
+- `model-evaluation` — QA thresholds and evaluation methodology
 
 ## Datasets:
 
-- Azure Public Dataset V2 (2019 VM traces): https://github.com/Azure/AzurePublicDataset/blob/master/AzurePublicDatasetV2.md 
+- Azure Public Dataset V2 (2019 VM traces): https://github.com/Azure/AzurePublicDataset/blob/master/AzurePublicDatasetV2.md
 
 ## Tech stack
 
-- Python 3.13 
+- Python 3.13
 
 ## Project Structure
 
@@ -47,6 +84,8 @@ This is a business analytics project to analyze and predict cloud resources and 
 2. Make minimal, focused changes
 3. Ensure tests pass
 4. Explain what you changed and why
+5. Check `docs/AI_ENGINEERING_SPEC.md` for AI engineering conventions
+6. Load relevant skills before starting domain-specific work
 
 ## Development Commands
 
