@@ -39,13 +39,13 @@ py -m pytest app/tests/ --cov=app.src --cov-report=term
 ### 4. Execute Notebooks (in order)
 ```bash
 # 03a — Feature Engineering (quality gates: data quality, feature validation)
-py -m jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output NUL --ExecutePreprocessor.timeout=600
+py -m papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600
 
 # 03b — Tabular Models (quality gates: model acceptance, classification, Q summary)
-py -m jupyter nbconvert --to notebook --execute notebooks/03b_tabular_models.ipynb --output NUL --ExecutePreprocessor.timeout=600
+py -m papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600
 
 # 03c — Timeseries Forecasting (quality gate: timeseries acceptance)
-py -m jupyter nbconvert --to notebook --execute notebooks/03c_timeseries_forecasting.ipynb --output NUL --ExecutePreprocessor.timeout=600
+py -m papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600
 ```
 
 Or open interactively:
@@ -117,11 +117,11 @@ Both tools use configuration from `pyproject.toml` (line-length=120, Python 3.14
 1. **Setup** — Python 3.14 with pip cache
 2. **Install** — `requirements.lock` if present, else `requirements.txt`
 3. **Unit tests** — `pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term`
-4. **Quality gates** — `nbconvert --execute` on all 3 notebooks (600s timeout)
+4. **Quality gates** — `papermill` execution on all 3 notebooks (600s timeout, `--log-output` for real-time progress)
 
 Run full CI locally:
 ```powershell
-pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term; if ($?) { jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output NUL --ExecutePreprocessor.timeout=600 }
+pytest app/tests/ -v --tb=short -x --cov=app.src --cov-report=term; if ($?) { papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600 }
 ```
 
 ---

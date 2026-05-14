@@ -53,7 +53,7 @@ The scope covers 10 concrete actions across three notebooks (`03a`, `03b`, `03c`
 |-----------|---------------|
 | **Risk-Based Thinking** | Risk register documented in notebook (§1.5) — identifies 6 failure modes with likelihood, impact, and mitigation |
 | **Measurable Metrics** | Success criteria enforced as assertion cells (MAPE < 15%, F1 > 0.85, R² > 0.7) |
-| **Iterative Process** | Quality gates fail loud-and-early during `nbconvert --execute`, enabling rapid iteration |
+| **Iterative Process** | Quality gates fail loud-and-early during notebook execution (via `papermill`), enabling rapid iteration |
 | **Traceability** | `run_log.csv` records every run with git hash, metrics, and pass/fail status |
 
 ---
@@ -62,10 +62,10 @@ The scope covers 10 concrete actions across three notebooks (`03a`, `03b`, `03c`
 
 ### 2.1 Assertion Cells as Quality Gates
 
-The core mechanism is Python `assert` statements in notebook code cells. When executed via `jupyter nbconvert --execute`, failed assertions raise `AssertionError`, halting execution with a non-zero exit code. This makes `nbconvert --execute` a **true CI quality gate**.
+The core mechanism is Python `assert` statements in notebook code cells. When executed via `papermill`, failed assertions raise `AssertionError`, halting execution with a non-zero exit code. This makes notebook execution a **true CI quality gate**.
 
 ```
-jupyter nbconvert --execute notebook.ipynb --output /dev/null
+papermill notebook.ipynb NUL --log-output --progress-bar --execution-timeout 600
   ↓
   Cell contains: assert metrics['mape'] < 15
   ↓
@@ -84,7 +84,7 @@ Each quality gate appears immediately after the data or model it validates:
 
 ### 2.3 No Pipeline Dependency
 
-All quality logic lives inside the notebooks themselves. The only external dependency is `jupyter nbconvert --execute`, which is available in any Python environment with Jupyter installed. This ensures portability across local development, CI runners, and air-gapped environments.
+All quality logic lives inside the notebooks themselves. The only external dependency is `papermill` (or an equivalent notebook executor), which is a lightweight pip install. This ensures portability across local development, CI runners, and air-gapped environments.
 
 ---
 
@@ -133,9 +133,9 @@ All quality logic lives inside the notebooks themselves. The only external depen
                               ▼
 .github/workflows/ci.yml (un-commented)
   └─ pytest app/tests/ --cov=app.src --cov-report=term
-  └─ jupyter nbconvert --execute notebooks/03a_*.ipynb
-  └─ jupyter nbconvert --execute notebooks/03b_*.ipynb
-  └─ jupyter nbconvert --execute notebooks/03c_*.ipynb
+  └─ papermill notebooks/03a_*.ipynb NUL --log-output --progress-bar --execution-timeout 600
+  └─ papermill notebooks/03b_*.ipynb NUL --log-output --progress-bar --execution-timeout 600
+  └─ papermill notebooks/03c_*.ipynb NUL --log-output --progress-bar --execution-timeout 600
 ```
 
 ---
@@ -203,7 +203,7 @@ else:
 
 ### 5.3 Failure Behavior
 
-If the data doesn't meet criteria, `nbconvert --execute` fails with `AssertionError` and a clear message. The CI pipeline stops at this cell, providing immediate feedback.
+If the data doesn't meet criteria, `papermill` fails with `AssertionError` and a clear message. The CI pipeline stops at this cell, providing immediate feedback.
 
 ---
 
@@ -521,7 +521,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest nbconvert jupyter nbformat
+          pip install pytest papermill jupyter nbformat
 
       - name: Run unit tests with coverage
         run: |
@@ -533,10 +533,7 @@ jobs:
         run: |
           for nb in notebooks/03a_*.ipynb notebooks/03b_*.ipynb notebooks/03c_*.ipynb; do
             echo "Executing $nb..."
-            jupyter nbconvert --to notebook \
-              --execute "$nb" \
-              --output /dev/null \
-              --ExecutePreprocessor.timeout=600
+            papermill "$nb" /dev/null --log-output --progress-bar --execution-timeout 600
           done
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -548,7 +545,7 @@ jobs:
 |-------|---------|------------|
 | `pip install` | Reproducible environment | Exits before testing |
 | `pytest --cov` | Unit tests + coverage report | PR is blocked, test report visible |
-| `nbconvert --execute` | End-to-end quality gates | PR is blocked with `AssertionError` from failing gate |
+| `papermill --log-output` | End-to-end quality gates | PR is blocked with `AssertionError` from failing gate |
 
 ---
 
@@ -858,12 +855,12 @@ In `.github/workflows/ci.yml`, change the install step to prefer the lockfile:
 
 | Notebook | Gate | Assertions | Triggered By |
 |----------|------|-----------|--------------|
-| 03a §2.2 | Data Quality | 3 | `nbconvert --execute` |
-| 03a §3.2 | Feature Validation | 8 | `nbconvert --execute` |
-| 03b §4.8 | Model Acceptance | ~6 per model | `nbconvert --execute` |
-| 03b §5.3 | Classification Gate | ~3 per model | `nbconvert --execute` |
-| 03b §11 | Q Summary Report | 0 (informational) | `nbconvert --execute` |
-| 03c §8.8 | Timeseries Gate | ~3 per model | `nbconvert --execute` |
+| 03a §2.2 | Data Quality | 3 | `papermill` |
+| 03a §3.2 | Feature Validation | 8 | `papermill` |
+| 03b §4.8 | Model Acceptance | ~6 per model | `papermill` |
+| 03b §5.3 | Classification Gate | ~3 per model | `papermill` |
+| 03b §11 | Q Summary Report | 0 (informational) | `papermill` |
+| 03c §8.8 | Timeseries Gate | ~3 per model | `papermill` |
 
 ### 14.3 Success Criteria Reference
 
@@ -916,10 +913,10 @@ After each phase, run:
 # Verify unit tests pass
 pytest app/tests/ -v --tb=short
 
-# Verify each notebook executes end-to-end (quality gates active)
-jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output /dev/null --ExecutePreprocessor.timeout=600
-jupyter nbconvert --to notebook --execute notebooks/03b_tabular_models.ipynb --output /dev/null --ExecutePreprocessor.timeout=600
-jupyter nbconvert --to notebook --execute notebooks/03c_timeseries_forecasting.ipynb --output /dev/null --ExecutePreprocessor.timeout=600
+# Verify each notebook executes end-to-end (quality gates active, real-time output)
+papermill notebooks/03a_feature_engineering.ipynb /dev/null --log-output --progress-bar --execution-timeout 600
+papermill notebooks/03b_tabular_models.ipynb /dev/null --log-output --progress-bar --execution-timeout 600
+papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --progress-bar --execution-timeout 600
 ```
 
 ---
@@ -951,7 +948,7 @@ jupyter nbconvert --to notebook --execute notebooks/03c_timeseries_forecasting.i
 
 - [ ] `.github/workflows/ci.yml` un-commented and active
 - [ ] Pipeline runs `pytest` with `--cov`
-- [ ] Pipeline runs `nbconvert --execute` on all 3 notebooks
+- [ ] Pipeline runs `papermill` on all 3 notebooks (real-time output via `--log-output`)
 
 ### Optional
 
@@ -1000,11 +997,10 @@ Replace the **Development Commands** section with:
 - Check code style: `black --check app/src/ app/tests/ && flake8 app/src/`
 - Format code: `black app/src/ app/tests/`
 
-### Notebook Execution
-- Execute end-to-end (quality gates active):
-  - `jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
-  - `jupyter nbconvert --to notebook --execute notebooks/03b_tabular_models.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
-  - `jupyter nbconvert --to notebook --execute notebooks/03c_timeseries_forecasting.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+### Notebook Execution (quality gates active, real-time output)
+  - `papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
+  - `papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600`
+  - `papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600`
 
 ### Quality Insurance
 - Generate QA compliance report: `python -m app.src.qa_report`
@@ -1013,7 +1009,7 @@ Replace the **Development Commands** section with:
 - Freeze dependencies: `pip freeze --exclude-editable > requirements.lock`
 
 ### CI/CD
-- Run full CI locally: `pytest app/tests/ -v && jupyter nbconvert --to notebook --execute notebooks/03a_feature_engineering.ipynb --output /dev/null --ExecutePreprocessor.timeout=600`
+- Run full CI locally: `pytest app/tests/ -v && papermill notebooks/03a_feature_engineering.ipynb NUL --log-output --progress-bar --execution-timeout 600`
 ```
 
 ---
@@ -1040,5 +1036,5 @@ Replace the **Development Commands** section with:
 | Classification F1 > 0.85 | Plan §1 | Assertion in 03b §5.3 | Yes |
 | All models pass thresholds | Project policy | Assertion in 03b §4.8 + §5.3 | Yes |
 | Unit tests pass | CRISP-ML(Q) §4 | pytest CI stage | Yes |
-| Notebooks execute cleanly | CRISP-ML(Q) §5 | nbconvert CI stage | Yes |
+| Notebooks execute cleanly | CRISP-ML(Q) §5 | papermill CI stage | Yes |
 | Model metrics auditable | CAMS: Measurement | run_log.csv | Yes (git-tracked) |

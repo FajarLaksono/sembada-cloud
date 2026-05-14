@@ -115,7 +115,7 @@ Create all infrastructure files, modules, tests, and CI/CD pipeline.
   - Python 3.14 setup
   - Install dependencies
   - Run `pytest app/tests/ -v`
-  - Execute notebook with `nbconvert --execute`
+  - Execute notebook with `papermill` (real-time output via `--log-output`)
 
 - [x] **requirements.txt** — Update with ML stack
   ```
@@ -500,7 +500,7 @@ Finalize notebook, run full validation, and prepare for production.
 ---
 
 ### Full Notebook Execution
-- [ ] Run entire notebook end-to-end: `jupyter nbconvert --execute`
+- [ ] Run entire notebook end-to-end: `papermill` (real-time output)
 - [ ] Verify no errors
 - [ ] Check outputs match expectations
 - [ ] Save final notebook
