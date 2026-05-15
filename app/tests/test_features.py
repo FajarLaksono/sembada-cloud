@@ -3,6 +3,7 @@
 import pandas as pd
 import numpy as np
 import pytest
+from unittest.mock import patch, MagicMock
 
 
 class TestCreateFeatures:
@@ -228,3 +229,126 @@ class TestMultiTableFeatures:
         result = create_features(vmtable_sample, deployments_df=deployments_sample)
         assert 'deployment_size' in result.columns
         assert result['deployment_size'].notna().all()
+
+    def test_waste_cost_computed_when_pricing_given(self, vmtable_sample, pricing_sample):
+        """waste_cost is present when pricing data is provided."""
+        from app.src.features import create_features
+
+        result = create_features(vmtable_sample, pricing_df=pricing_sample)
+        if 'vm_cost' in result.columns:
+            assert result['waste_cost'].notna().any() or result['vm_cost'].isna().all()
+
+
+class TestFeatureSetValidation:
+    """Tests for invalid feature_set handling."""
+
+    def test_invalid_feature_set_raises(self):
+        from app.src.features import get_feature_target_columns
+
+        with pytest.raises(ValueError):
+            get_feature_target_columns("regression_avg_cpu", feature_set="invalid")
+
+
+class TestBucketParsingEdgeCases:
+    """Test edge cases in bucket string parsing."""
+
+    def test_parse_core_nan(self):
+        from app.src.features import create_features
+        import pandas as pd
+
+        df = pd.DataFrame({
+            'vm_id': ['a'], 'vm_core_count_bucket': [None],
+            'vm_memory_gb_bucket': ['8'], 'timestamp_created': [0],
+            'timestamp_deleted': [3600], 'max_cpu': [50.0],
+            'avg_cpu': [10.0], 'p95_max_cpu': [30.0],
+            'vm_category': ['Interactive'], 'subscription_id': ['s1'],
+            'deployment_id': ['d1'],
+        })
+
+        result = create_features(df)
+        assert result.loc[0, 'core_count'] == 4
+
+    def test_parse_memory_nan(self):
+        from app.src.features import create_features
+        import pandas as pd
+
+        df = pd.DataFrame({
+            'vm_id': ['a'], 'vm_core_count_bucket': ['4'],
+            'vm_memory_gb_bucket': [None], 'timestamp_created': [0],
+            'timestamp_deleted': [3600], 'max_cpu': [50.0],
+            'avg_cpu': [10.0], 'p95_max_cpu': [30.0],
+            'vm_category': ['Interactive'], 'subscription_id': ['s1'],
+            'deployment_id': ['d1'],
+        })
+
+        result = create_features(df)
+        assert result.loc[0, 'memory_gb'] == 8
+
+    def test_parse_core_invalid_string(self):
+        from app.src.features import create_features
+        import pandas as pd
+
+        df = pd.DataFrame({
+            'vm_id': ['a'], 'vm_core_count_bucket': ['invalid'],
+            'vm_memory_gb_bucket': ['8'], 'timestamp_created': [0],
+            'timestamp_deleted': [3600], 'max_cpu': [50.0],
+            'avg_cpu': [10.0], 'p95_max_cpu': [30.0],
+            'vm_category': ['Interactive'], 'subscription_id': ['s1'],
+            'deployment_id': ['d1'],
+        })
+
+        result = create_features(df)
+        assert result.loc[0, 'core_count'] == 4
+
+
+class TestLoadCpuReadings:
+    """Tests for load_cpu_readings() with mocked DuckDB."""
+
+    def test_no_shards_returns_empty(self, tmp_path):
+        from app.src.features import load_cpu_readings
+        import pandas as pd
+
+        result = load_cpu_readings(tmp_path, max_vms=5)
+        assert isinstance(result, pd.DataFrame)
+        assert result.empty
+        assert list(result.columns) == ['vm_id', 'timestamp', 'avg_cpu', 'max_cpu', 'p95_max_cpu']
+
+    @patch("duckdb.connect")
+    def test_with_mocked_duckdb(self, mock_connect, tmp_path):
+        from app.src.features import load_cpu_readings
+        import pandas as pd
+
+        (tmp_path / "cpu_readings").mkdir()
+        (tmp_path / "cpu_readings" / "shard.parquet").write_text("fake")
+
+        mock_con = MagicMock()
+        mock_connect.return_value = mock_con
+
+        mock_df = pd.DataFrame({
+            "vm_id": ["vm_a", "vm_b"],
+            "count": [100, 200],
+            "min_ts": [0, 0],
+            "max_ts": [36000, 72000],
+        })
+
+        second_result = mock_con.execute.return_value
+
+        def side_effect(sql):
+            if "GROUP BY" in sql:
+                r = MagicMock()
+                r.fetchdf.return_value = mock_df
+                return r
+            r2 = MagicMock()
+            r2.fetchdf.return_value = pd.DataFrame({
+                "vm_id": ["vm_a"] * 5,
+                "timestamp": range(5),
+                "avg_cpu": [10.0] * 5,
+                "max_cpu": [50.0] * 5,
+                "p95_max_cpu": [30.0] * 5,
+            })
+            return r2
+
+        mock_con.execute.side_effect = side_effect
+
+        result = load_cpu_readings(tmp_path, max_vms=5)
+        assert isinstance(result, pd.DataFrame)

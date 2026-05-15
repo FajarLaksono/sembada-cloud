@@ -15,8 +15,8 @@ data/
 models/**/*.pkl
 models/**/*.keras
 models/**/*.h5
-!models/.gitkeep
 models/*.csv
+models/
 
 # log files
 catboost_info/
