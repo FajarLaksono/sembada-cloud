@@ -5,18 +5,18 @@ Reads raw CSV.gz files from staging, writes columnar Parquet to transformed/ dir
 
 Usage:
     python app/src/convert_to_parquet.py \\
-        --input-dir data/staging/azure_dataset_v2_core \\
+        --input-dir data/staging/azure_dataset_v2 \\
         --output-dir data/transformed/parquet
 
     # Force re-convert
     python app/src/convert_to_parquet.py \\
-        --input-dir data/staging/azure_dataset_v2_core \\
+        --input-dir data/staging/azure_dataset_v2 \\
         --output-dir data/transformed/parquet \\
         --overwrite
 
     # Parallel conversion of CPU shards (faster)
     python app/src/convert_to_parquet.py \\
-        --input-dir data/staging/azure_dataset_v2_core \\
+        --input-dir data/staging/azure_dataset_v2 \\
         --output-dir data/transformed/parquet \\
         --workers 4
 """
@@ -269,7 +269,7 @@ def main() -> None:
     parser.add_argument(
         "--input-dir",
         type=str,
-        default="data/staging/azure_dataset_v2_core",
+        default="data/staging/azure_dataset_v2",
         help="Path to raw CSV.gz data directory",
     )
     parser.add_argument(
