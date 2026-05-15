@@ -161,7 +161,7 @@ Given the ~7.7 TB dataset size, **full dataset processing is not feasible** for 
 
 ```python
 # Workflow leveraging existing notebook (notebooks/Google_ClusterData2019Traces.ipynb)
-# Functions available in: functions/fetch_cluster_data.py
+# Functions available in: app/src/fetch_cluster_data.py
 # VERIFIED BigQuery dataset path: google.com:google-cluster-data
 
 1. Initialize BigQuery client (with credentials.json and .env configured)
@@ -341,7 +341,7 @@ sembada-cloud/
 ├── app/
 │   ├── src/                            # App code (future)
 │   └── tests/                          # Test files (future)
-├── functions/                          # Helper functions
+├── app/src/                            # Helper / reusable functions
 │   └── fetch_cluster_data.py           # BigQuery fetch functions (EXISTS)
 ├── docs/
 │   └── TECHNICAL_SPECIFICATION.md      # This document

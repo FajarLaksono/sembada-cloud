@@ -4,18 +4,18 @@ Azure Public Dataset V2 — CSV.gz to Parquet Converter
 Reads raw CSV.gz files from staging, writes columnar Parquet to transformed/ directory.
 
 Usage:
-    python functions/convert_to_parquet.py \\
+    python app/src/convert_to_parquet.py \\
         --input-dir data/staging/azure_dataset_v2_core \\
         --output-dir data/transformed/parquet
 
     # Force re-convert
-    python functions/convert_to_parquet.py \\
+    python app/src/convert_to_parquet.py \\
         --input-dir data/staging/azure_dataset_v2_core \\
         --output-dir data/transformed/parquet \\
         --overwrite
 
     # Parallel conversion of CPU shards (faster)
-    python functions/convert_to_parquet.py \\
+    python app/src/convert_to_parquet.py \\
         --input-dir data/staging/azure_dataset_v2_core \\
         --output-dir data/transformed/parquet \\
         --workers 4

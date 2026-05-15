@@ -11,10 +11,10 @@ MODES (set via --mode flag or DOWNLOAD_MODE variable):
 
 Usage:
   pip install requests tqdm
-  python download_azure_v2.py --mode core
-  python download_azure_v2.py --mode sample
-  python download_azure_v2.py --mode full
-  python download_azure_v2.py --mode full --workers 4   # parallel downloads
+  python app/src/download_azure_v2.py --mode core
+  python app/src/download_azure_v2.py --mode sample
+  python app/src/download_azure_v2.py --mode full
+  python app/src/download_azure_v2.py --mode full --workers 4   # parallel downloads
 """
 
 import os

@@ -81,3 +81,12 @@ class TestComparisonTable:
         best_mask = df.attrs["highlight"]
         assert best_mask.loc["ModelA", "mae"] == True  # lower MAE is better
         assert best_mask.loc["ModelB", "r2"] == True  # higher R2 is better
+
+    def test_handles_non_comparable_columns(self):
+        results = {
+            "ModelA": {"mae": 1.0, "notes": "good"},
+            "ModelB": {"mae": 2.0, "notes": "bad"},
+        }
+        df = comparison_table(results)
+        assert isinstance(df, pd.DataFrame)
+        assert "highlight" in df.attrs
