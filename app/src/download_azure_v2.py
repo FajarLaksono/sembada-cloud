@@ -21,8 +21,10 @@ import os
 import sys
 import time
 import hashlib
+import shutil
 import argparse
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -83,6 +85,8 @@ MODE_SIZES = {
 CHUNK = 4 * 1024 * 1024  # 4 MB chunks for large files
 MAX_RETRIES = 5
 RETRY_BACKOFF = [2, 4, 8, 16, 32]  # seconds between retries
+SEGMENT_THRESHOLD = 50 * 1024 * 1024  # 50 MB — smallest file worth segmenting
+MAX_SEGMENTS = 8  # cap to avoid diminishing returns
 print_lock = threading.Lock()
 
 
@@ -111,7 +115,109 @@ def sizeof_fmt(num: float) -> str:
     return f"{num:.1f} TB"
 
 
-def download_file(session: requests.Session, url: str, dest: Path, show_progress: bool = True) -> bool:
+def _auto_segments(total: int, cap: int = 4) -> int:
+    if total < SEGMENT_THRESHOLD:
+        return 1
+    return max(1, min(total // SEGMENT_THRESHOLD, cap, MAX_SEGMENTS))
+
+
+def download_file_segments(
+    session: requests.Session,
+    url: str,
+    dest: Path,
+    total: int,
+    segments: int,
+    progress_callback: Callable | None = None,
+) -> bool:
+    """Download a file by splitting it into *segments* parallel byte-range requests."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    # Skip if already fully downloaded
+    if dest.exists() and dest.stat().st_size == total:
+        with print_lock:
+            print(f"  ✓ Already complete: {dest.name} ({sizeof_fmt(total)})")
+        return True
+
+    with print_lock:
+        print(f"  → Downloading {dest.name} ({sizeof_fmt(total)}) in {segments} segments")
+
+    base = total // segments
+    ranges = [
+        (i * base, total - 1 if i == segments - 1 else (i + 1) * base - 1)
+        for i in range(segments)
+    ]
+
+    progress = tqdm(total=total, unit="B", unit_scale=True, unit_divisor=1024,
+                    desc=dest.name[:40].ljust(40), leave=False)
+    seg_lock = threading.Lock()
+    part_paths: list[Path] = []
+
+    def _dl_segment(seg_idx: int, start: int, end: int) -> bool:
+        nonlocal part_paths
+        for attempt in range(MAX_RETRIES):
+            try:
+                headers = {"Range": f"bytes={start}-{end}"}
+                with session.get(url, headers=headers, stream=True, timeout=(10, 30)) as r:
+                    r.raise_for_status()
+                    part = Path(f"{dest}.part{seg_idx}")
+                    with seg_lock:
+                        if seg_idx >= len(part_paths):
+                            part_paths.append(part)
+                    with open(part, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=CHUNK):
+                            if chunk:
+                                f.write(chunk)
+                                with seg_lock:
+                                    progress.update(len(chunk))
+                                    if progress_callback:
+                                        progress_callback(progress.n, total)
+                    return True
+            except (requests.RequestException, IOError) as e:
+                wait = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                with print_lock:
+                    print(f"  ✗ Segment {seg_idx} attempt {attempt+1}/{MAX_RETRIES}: {e}")
+                    if attempt < MAX_RETRIES - 1:
+                        print(f"    Retrying in {wait}s…")
+                time.sleep(wait)
+        return False
+
+    with ThreadPoolExecutor(max_workers=segments) as pool:
+        futures = {pool.submit(_dl_segment, i, s, e): i for i, (s, e) in enumerate(ranges)}
+        all_ok = True
+        for future in as_completed(futures):
+            if not future.result():
+                all_ok = False
+
+    progress.close()
+
+    if not all_ok:
+        for p in part_paths:
+            if p.exists():
+                p.unlink()
+        with print_lock:
+            print(f"  ✗✗ FAILED {dest.name}")
+        return False
+
+    # Concatenate segments in order
+    with open(dest, "wb") as f:
+        for seg_idx in range(segments):
+            part = Path(f"{dest}.part{seg_idx}")
+            with open(part, "rb") as pf:
+                shutil.copyfileobj(pf, f)
+            part.unlink()
+
+    if dest.stat().st_size != total:
+        dest.unlink()
+        with print_lock:
+            print(f"  ✗ Size mismatch for {dest.name}")
+        return False
+
+    with print_lock:
+        print(f"  ✓ Finished {dest.name} ({sizeof_fmt(dest.stat().st_size)})")
+    return True
+
+
+def download_file(session: requests.Session, url: str, dest: Path, show_progress: bool = True, progress_callback: Callable | None = None, segments: int = 0) -> bool:
     """Download a single file with resume support, retries, and progress reporting."""
     dest.parent.mkdir(parents=True, exist_ok=True)
 
@@ -128,6 +234,11 @@ def download_file(session: requests.Session, url: str, dest: Path, show_progress
                 with print_lock:
                     print(f"  ✓ Already complete: {dest.name} ({total_label})")
                 return True
+
+            # Branch to multi-segment download for large files
+            seg_count = segments if segments > 0 else _auto_segments(total)
+            if seg_count > 1:
+                return download_file_segments(session, url, dest, total, seg_count, progress_callback)
 
             existing = dest.stat().st_size if dest.exists() else 0
             headers = {"Range": f"bytes={existing}-"} if existing > 0 else {}
@@ -165,6 +276,8 @@ def download_file(session: requests.Session, url: str, dest: Path, show_progress
                         if chunk:
                             f.write(chunk)
                             progress.update(len(chunk))
+                            if progress_callback:
+                                progress_callback(progress.n, total)
 
                 progress.close()
 
@@ -194,15 +307,18 @@ def download_all(
     file_list: list,
     output_dir: Path,
     workers: int = 1,
+    segments: int = 0,
 ) -> None:
     total_files = len(file_list)
     failed = []
     session = create_session()
 
+    seg_label = f"{segments}" if segments else "auto"
     print(f"\n{'─'*60}")
     print(f"  Output directory : {output_dir.resolve()}")
     print(f"  Files to download: {total_files}")
     print(f"  Parallel workers : {workers}")
+    print(f"  Segments per file: {seg_label}")
     print(f"{'─'*60}\n")
 
     if workers == 1:
@@ -210,7 +326,7 @@ def download_all(
         for i, (url, rel_path) in enumerate(file_list, 1):
             dest = output_dir / rel_path
             print(f"[{i:3d}/{total_files}] {rel_path}")
-            ok = download_file(session, url, dest, show_progress=True)
+            ok = download_file(session, url, dest, show_progress=True, segments=segments)
             if not ok:
                 failed.append(rel_path)
     else:
@@ -220,10 +336,12 @@ def download_all(
         def _task(args):
             url, rel_path = args
             dest = output_dir / rel_path
-            ok = download_file(session, url, dest, show_progress=False)
+            def cb(cur, tot):
+                overall.set_postfix_str(f"{rel_path}: {sizeof_fmt(cur)}/{sizeof_fmt(tot)}")
+            ok = download_file(session, url, dest, show_progress=False, progress_callback=cb, segments=segments)
             with print_lock:
                 overall.update(1)
-                overall.set_postfix_str(rel_path[-35:])
+                overall.set_postfix_str(f"{rel_path} ✓")
             return (rel_path, ok)
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -281,6 +399,12 @@ def main():
         default=None,
         help="Override: specific CPU file range, e.g. '1-10' downloads files 1 to 10 only",
     )
+    parser.add_argument(
+        "--segments",
+        type=int,
+        default=0,
+        help="Segments per large file (0=auto, default: min(4, size/50MB))",
+    )
     args = parser.parse_args()
 
     file_list = MODES[args.mode].copy()
@@ -300,7 +424,7 @@ def main():
     print(f"\n  Azure Public Dataset V2 — Downloader")
     print(f"  Mode: {args.mode}  ({MODE_SIZES[args.mode]})")
 
-    download_all(file_list, args.output_dir, workers=args.workers)
+    download_all(file_list, args.output_dir, workers=args.workers, segments=args.segments)
 
 
 if __name__ == "__main__":
