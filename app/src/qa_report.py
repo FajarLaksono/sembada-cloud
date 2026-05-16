@@ -1,5 +1,5 @@
 """
-Quality Insurance report generator.
+Quality Assurance report generator.
 Reads run_log.csv and prints compliance summary against success criteria.
 """
 
@@ -78,7 +78,7 @@ def generate_report(log_df: pd.DataFrame) -> dict:
 def print_report(report: dict) -> None:
     """Print formatted QA report to stdout."""
     print("=" * 60)
-    print("  QUALITY INSURANCE REPORT — run_log.csv")
+    print("  QUALITY ASSURANCE REPORT — run_log.csv")
     print("=" * 60)
     print(f"\n  Total model runs: {report['total_runs']}")
     print(f"  Passing criteria: {report['passing']}")
