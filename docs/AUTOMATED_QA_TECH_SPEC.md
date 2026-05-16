@@ -1,7 +1,7 @@
 # Automated Quality Assurance Technical Specification
 
 **Project:** Sembada Cloud — Cloud Resource & Cost Prediction
-**Methodology:** CRISP-ML(Q) — Quality Insurance Phase
+**Methodology:** CRISP-ML(Q) — Quality Assurance Phase
 **Document Status:** Planning
 **Last Updated:** 2026-05-13
 
@@ -16,7 +16,7 @@
 5. [Action 2: Data Quality Gate](#5-action-2-data-quality-gate)
 6. [Action 3: Feature Validation Gate](#6-action-3-feature-validation-gate)
 7. [Action 4: Model Acceptance Gates](#7-action-4-model-acceptance-gates)
-8. [Action 5: Quality Insurance Summary Report](#8-action-5-quality-insurance-summary-report)
+8. [Action 5: Quality Assurance Summary Report](#8-action-5-quality-Assurance-summary-report)
 9. [Action 6: Fix CatBoost Test Gap](#9-action-6-fix-catboost-test-gap)
 10. [Action 7: Activate CI/CD Pipeline](#10-action-7-activate-cicd-pipeline)
 11. [Action 8: Optional QA Report Utility](#11-action-8-optional-qa-report-utility)
@@ -34,7 +34,7 @@
 
 ### 1.1 Purpose
 
-This document defines the technical specification for implementing the **Quality Insurance (Q)** phase of CRISP-ML(Q) for the Sembada Cloud predictive analysis project. It builds on the existing infrastructure defined in `AZURE_PREDICTIVE_ANALYSIS_PLAN.md` and adds automated quality gates appropriate for a **notebook-first workflow**.
+This document defines the technical specification for implementing the **Quality Assurance (Q)** phase of CRISP-ML(Q) for the Sembada Cloud predictive analysis project. It builds on the existing infrastructure defined in `AZURE_PREDICTIVE_ANALYSIS_PLAN.md` and adds automated quality gates appropriate for a **notebook-first workflow**.
 
 ### 1.2 Scope
 
@@ -180,7 +180,7 @@ Insert in `notebooks/03a_feature_engineering.ipynb` as a new **code cell** immed
 
 ```python
 # ---------------------------------------------------------------------------
-# DATA QUALITY GATE — CRISP-ML(Q) Quality Insurance
+# DATA QUALITY GATE — CRISP-ML(Q) Quality Assurance
 # Fail fast if input data is empty, missing required columns, or has no rows.
 # ---------------------------------------------------------------------------
 assert len(vmtable) > 0, "FAIL: Empty vmtable — cannot proceed"
@@ -217,7 +217,7 @@ Insert in `notebooks/03a_feature_engineering.ipynb` as a new **code cell** immed
 
 ```python
 # ---------------------------------------------------------------------------
-# FEATURE VALIDATION GATE — CRISP-ML(Q) Quality Insurance
+# FEATURE VALIDATION GATE — CRISP-ML(Q) Quality Assurance
 # Verify engineered features contain expected columns with valid ranges.
 # ---------------------------------------------------------------------------
 TARGET_COLS = ['is_idle', 'waste_tier', 'waste_fraction']
@@ -265,7 +265,7 @@ Insert in `notebooks/03b_tabular_models.ipynb` as a new **subsection §4.8** wit
 ```markdown
 ### 4.8 Model Acceptance Gate
 
-**CRISP-ML(Q):** Quality Insurance
+**CRISP-ML(Q):** Quality Assurance
 
 **Purpose:** Verify all regression models meet the success criteria
 defined in §1 (MAPE < 15%, R² > 0.7). This gate fails the notebook
@@ -274,7 +274,7 @@ execution if any model underperforms.
 
 ```python
 # ---------------------------------------------------------------------------
-# MODEL ACCEPTANCE GATE — CRISP-ML(Q) Quality Insurance
+# MODEL ACCEPTANCE GATE — CRISP-ML(Q) Quality Assurance
 # All models must meet minimum performance thresholds.
 # ---------------------------------------------------------------------------
 SUCCESS_MAPE = 15.0   # Maximum acceptable MAPE (%)
@@ -318,7 +318,7 @@ Insert in `notebooks/03b_tabular_models.ipynb` immediately after §5.3 (Save Bes
 
 ```python
 # ---------------------------------------------------------------------------
-# CLASSIFICATION ACCEPTANCE GATE — CRISP-ML(Q) Quality Insurance
+# CLASSIFICATION ACCEPTANCE GATE — CRISP-ML(Q) Quality Assurance
 # ---------------------------------------------------------------------------
 SUCCESS_F1 = 0.80
 
@@ -348,7 +348,7 @@ Insert in `notebooks/03c_timeseries_forecasting.ipynb` after the model compariso
 
 ```python
 # ---------------------------------------------------------------------------
-# TIMESERIES ACCEPTANCE GATE — CRISP-ML(Q) Quality Insurance
+# TIMESERIES ACCEPTANCE GATE — CRISP-ML(Q) Quality Assurance
 # ---------------------------------------------------------------------------
 if ts_results:
     print("=" * 60)
@@ -366,7 +366,7 @@ if ts_results:
 
 ---
 
-## 8. Action 5: Quality Insurance Summary Report
+## 8. Action 5: Quality Assurance Summary Report
 
 ### 8.1 Location
 
@@ -389,7 +389,7 @@ The cell references these variables that exist in the 03b notebook runtime:
 
 ```python
 # ---------------------------------------------------------------------------
-# QUALITY INSURANCE REPORT — End of Notebook Summary
+# QUALITY ASSURANCE REPORT — End of Notebook Summary
 # This cell uses variables from the 03b notebook runtime.
 # It does NOT require any pre-defined boolean flags — all status is
 # computed inline from the actual metrics dicts.
@@ -415,7 +415,7 @@ ts_available = bool(ts_results)
 
 # --- Print report ---
 print("=" * 70)
-print("  QUALITY INSURANCE REPORT")
+print("  QUALITY ASSURANCE REPORT")
 print(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 print("=" * 70)
 
@@ -552,7 +552,7 @@ Notebook execution is deliberately excluded from CI due to the ~100GB VM CPU rea
 
 ### 11.1 Purpose
 
-A standalone Python module that reads `models/run_log.csv` and generates a human-readable Quality Insurance compliance summary. This can be run locally without Jupyter.
+A standalone Python module that reads `models/run_log.csv` and generates a human-readable Quality Assurance compliance summary. This can be run locally without Jupyter.
 
 ### 11.2 File Location
 
@@ -562,7 +562,7 @@ A standalone Python module that reads `models/run_log.csv` and generates a human
 
 ```python
 """
-Quality Insurance report generator.
+Quality Assurance report generator.
 Reads run_log.csv and prints compliance summary against success criteria.
 """
 
@@ -641,7 +641,7 @@ def generate_report(log_df: pd.DataFrame) -> dict:
 def print_report(report: dict) -> None:
     """Print formatted QA report to stdout."""
     print("=" * 60)
-    print("  QUALITY INSURANCE REPORT — run_log.csv")
+    print("  QUALITY ASSURANCE REPORT — run_log.csv")
     print("=" * 60)
     print(f"\n  Total model runs: {report['total_runs']}")
     print(f"  Passing criteria: {report['passing']}")
@@ -931,7 +931,7 @@ papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --pr
 - [ ] **03a §3.2** — Feature Validation Gate code cell added
 - [ ] **03b §4.8** — Model Acceptance Gate subsection added
 - [ ] **03b §5.3** — Classification Gate code cell added
-- [ ] **03b §11** — Quality Insurance Summary Report cell added
+- [ ] **03b §11** — Quality Assurance Summary Report cell added
 - [ ] **03c §8.8** — Timeseries Gate code cell added
 
 ### Test Suite
@@ -979,7 +979,7 @@ papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --pr
 | Formatting | `black app/src/ app/tests/` | No change needed |
 | Notebook Execution | Single monolithic notebook | 3 notebooks separately listed |
 | CI/CD | `pytest ... && jupyter nbconvert ...` | Keep as-is (CI does both) |
-| **NEW: Quality Insurance** | _(missing)_ | `python -m app.src.qa_report` |
+| **NEW: Quality Assurance** | _(missing)_ | `python -m app.src.qa_report` |
 | **NEW: Environment Lock** | _(missing)_ | `pip freeze --exclude-editable > requirements.lock` |
 
 ### 17.3 Updated AGENTS.md Content
@@ -1003,7 +1003,7 @@ Replace the **Development Commands** section with:
   - `papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600`
   - `papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600`
 
-### Quality Insurance
+### Quality Assurance
 - Generate QA compliance report: `python -m app.src.qa_report`
 
 ### Environment

@@ -103,7 +103,7 @@ This project uses opencode for AI-assisted development. Configuration is in
 - Execute 03b: `papermill notebooks/03b_tabular_models.ipynb NUL --log-output --progress-bar --execution-timeout 600`
 - Execute 03c: `papermill notebooks/03c_timeseries_forecasting.ipynb NUL --log-output --progress-bar --execution-timeout 600`
 
-### Quality Insurance
+### Quality Assurance
 - Generate QA compliance report: `python -m app.src.qa_report`
 
 ### Environment

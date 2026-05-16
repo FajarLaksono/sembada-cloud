@@ -39,7 +39,7 @@ RISK_REGISTER = make_md("""### 1.5 Quality Risk Register
 # 03a: Data Quality Gate (insert after dataset load cell)
 # ---------------------------------------------------------------------------
 DATA_QUALITY_GATE = make_code("""# ---------------------------------------------------------------------------
-# DATA QUALITY GATE — CRISP-ML(Q) Quality Insurance
+# DATA QUALITY GATE — CRISP-ML(Q) Quality Assurance
 # Fail fast if input data is empty, missing required columns, or has no rows.
 # ---------------------------------------------------------------------------
 assert len(vmtable) > 0, "FAIL: Empty vmtable — cannot proceed"
@@ -64,7 +64,7 @@ else:
 # 03a: Feature Validation Gate (insert after create_features() call cell)
 # ---------------------------------------------------------------------------
 FEATURE_VALIDATION_GATE = make_code("""# ---------------------------------------------------------------------------
-# FEATURE VALIDATION GATE — CRISP-ML(Q) Quality Insurance
+# FEATURE VALIDATION GATE — CRISP-ML(Q) Quality Assurance
 # Verify engineered features contain expected columns with valid ranges.
 # ---------------------------------------------------------------------------
 TARGET_COLS = ['is_idle', 'waste_tier', 'waste_fraction']
@@ -100,12 +100,12 @@ print(f"[OK] Features validated: {len(features_df):,} rows, "
 # ---------------------------------------------------------------------------
 MODEL_ACCEPTANCE_MD = make_md("""### 4.8 Model Acceptance Gate
 
-**CRISP-ML(Q):** Quality Insurance
+**CRISP-ML(Q):** Quality Assurance
 
 **Purpose:** Verify all regression models meet the success criteria defined in §1 (MAPE < 15%, R² > 0.7). This gate fails the notebook execution if any model underperforms.""")
 
 MODEL_ACCEPTANCE_CODE = make_code("""# ---------------------------------------------------------------------------
-# MODEL ACCEPTANCE GATE — CRISP-ML(Q) Quality Insurance
+# MODEL ACCEPTANCE GATE — CRISP-ML(Q) Quality Assurance
 # All models must meet minimum performance thresholds.
 # ---------------------------------------------------------------------------
 SUCCESS_MAPE = 15.0
@@ -145,7 +145,7 @@ print("[OK] All regression models pass acceptance gate")""")
 # 03b: Classification Gate (insert after §5.3 save cell)
 # ---------------------------------------------------------------------------
 CLASSIFICATION_GATE = make_code("""# ---------------------------------------------------------------------------
-# CLASSIFICATION ACCEPTANCE GATE — CRISP-ML(Q) Quality Insurance
+# CLASSIFICATION ACCEPTANCE GATE — CRISP-ML(Q) Quality Assurance
 # ---------------------------------------------------------------------------
 SUCCESS_F1 = 0.80
 
@@ -168,10 +168,10 @@ print("[OK] All classification models pass acceptance gate")""")
 
 
 # ---------------------------------------------------------------------------
-# 03b: Quality Insurance Summary Report (insert before §11 conclusions)
+# 03b: Quality Assurance Summary Report (insert before §11 conclusions)
 # ---------------------------------------------------------------------------
 Q_SUMMARY_REPORT = make_code('''# ---------------------------------------------------------------------------
-# QUALITY INSURANCE REPORT \u2014 End of Notebook Summary
+# QUALITY ASSURANCE REPORT \u2014 End of Notebook Summary
 # This cell uses variables from the 03b notebook runtime.
 # ---------------------------------------------------------------------------
 from datetime import datetime
@@ -193,7 +193,7 @@ all_models_passing = reg_models_passing + clf_models_passing
 ts_available = bool(ts_results)
 
 print("=" * 70)
-print("  QUALITY INSURANCE REPORT")
+print("  QUALITY ASSURANCE REPORT")
 print(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 print("=" * 70)
 
@@ -228,7 +228,7 @@ print("=" * 70)''')
 # 03c: Timeseries Gate (insert at §8.8 after model comparison)
 # ---------------------------------------------------------------------------
 TIMESERIES_GATE = make_code("""# ---------------------------------------------------------------------------
-# TIMESERIES ACCEPTANCE GATE — CRISP-ML(Q) Quality Insurance
+# TIMESERIES ACCEPTANCE GATE — CRISP-ML(Q) Quality Assurance
 # ---------------------------------------------------------------------------
 if ts_results:
     print("=" * 60)

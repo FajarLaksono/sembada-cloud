@@ -84,7 +84,7 @@ class TestPrintReport:
                   "failures": [], "models_by_task": {}}
         print_report(report)
         captured = capsys.readouterr()
-        assert "QUALITY INSURANCE REPORT" in captured.out
+        assert "QUALITY ASSURANCE REPORT" in captured.out
         assert "STATUS:" in captured.out
 
     def test_prints_passing_report(self, capsys):

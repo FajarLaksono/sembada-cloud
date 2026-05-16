@@ -10,7 +10,7 @@ metadata:
 
 ## What I Do
 
-I document the model evaluation methodology and Quality Insurance (QA) gates
+I document the model evaluation methodology and Quality Assurance (QA) gates
 for this project. When an agent works on model training, evaluation, or QA
 reporting, I provide the acceptance criteria so it knows what "good enough"
 means.
