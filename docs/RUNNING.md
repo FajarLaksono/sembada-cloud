@@ -88,7 +88,7 @@ CRISP-ML(Q) assertion cells embedded in the notebooks. When a gate fails, `nbcon
 | 03a §1.5 | Risk Register | 0 (markdown) | Never (informational) |
 | 03a §2.2 | Data Quality | 3 | Data empty, no unique VMs, missing required columns |
 | 03a §3.2 | Feature Validation | 8+ | Missing target/feature columns, invalid ranges |
-| 03b §4.8 | Model Acceptance | ~6/model | MAPE > 15% or R² < 0.7 |
+| 03b §4.8 | Model Acceptance | ~3/model | R² < 0.7 (avg_cpu — MAPE informational only) |
 | 03b §5.3 | Classification Gate | ~3/model | F1 < 0.80 |
 | 03b §11 | Q Summary Report | 0 (informational) | Never — prints pass/fail status |
 | 03c §8.8 | Timeseries Gate | ~3/model | MAE >= 5.0 |

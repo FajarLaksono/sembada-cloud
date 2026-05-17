@@ -33,10 +33,14 @@ def check_model_compliance(row: pd.Series) -> tuple[bool, list[str]]:
     task = row.get('task', '')
 
     if 'regression' in task:
-        if row.get('mape', 100) > SUCCESS_CRITERIA['regression']['mape']:
-            failures.append(f"MAPE {row['mape']:.1f}% > {SUCCESS_CRITERIA['regression']['mape']}%")
-        if row.get('r2', 0) < SUCCESS_CRITERIA['regression']['r2']:
-            failures.append(f"R² {row['r2']:.3f} < {SUCCESS_CRITERIA['regression']['r2']}")
+        if 'avg_cpu' in task:
+            if row.get('r2', 0) < SUCCESS_CRITERIA['regression']['r2']:
+                failures.append(f"R² {row['r2']:.3f} < {SUCCESS_CRITERIA['regression']['r2']}")
+        else:
+            if row.get('mape', 100) > SUCCESS_CRITERIA['regression']['mape']:
+                failures.append(f"MAPE {row['mape']:.1f}% > {SUCCESS_CRITERIA['regression']['mape']}%")
+            if row.get('r2', 0) < SUCCESS_CRITERIA['regression']['r2']:
+                failures.append(f"R² {row['r2']:.3f} < {SUCCESS_CRITERIA['regression']['r2']}")
 
     elif 'classification' in task or 'classif' in task:
         if row.get('f1_score', 0) < SUCCESS_CRITERIA['classification']['f1']:

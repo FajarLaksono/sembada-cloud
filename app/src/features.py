@@ -236,7 +236,7 @@ def get_feature_target_columns(task: str, feature_set: str = "all") -> Tuple[lis
     # Base features (no target leakage — target-related columns excluded per task below)
     core_features = [
         'core_count', 'memory_gb', 'lifetime_hours',
-        'cpu_per_core', 'memory_per_core', 'burstiness', 'max_to_avg_ratio',
+        'memory_per_core',
         'is_short_lived',
         'rate_per_hour', 'sub_vm_count', 'sub_tenure', 'deployment_size',
     ]
@@ -247,7 +247,8 @@ def get_feature_target_columns(task: str, feature_set: str = "all") -> Tuple[lis
     task_extra_features = {
         "regression_avg_cpu": ['max_cpu', 'p95_max_cpu'],
         "regression_waste": ['max_cpu', 'p95_max_cpu'],
-        "regression_cost": ['avg_cpu', 'max_cpu', 'p95_max_cpu'],
+        "regression_cost": ['avg_cpu', 'max_cpu', 'p95_max_cpu',
+                            'cpu_per_core', 'burstiness', 'max_to_avg_ratio'],
         "classification_idle": ['max_cpu', 'p95_max_cpu'],
         "classification_tier": ['max_cpu', 'p95_max_cpu'],
     }
