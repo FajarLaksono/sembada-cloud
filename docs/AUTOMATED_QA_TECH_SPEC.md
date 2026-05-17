@@ -1019,41 +1019,41 @@ papermill notebooks/03c_timeseries_forecasting.ipynb /dev/null --log-output --pr
 
 ### Notebook Quality Gates
 
-- [ ] **03a §1.5** — Risk Register markdown cell added
-- [ ] **03a §2.2** — Data Quality Gate code cell added
-- [ ] **03a §3.2** — Feature Validation Gate code cell added
-- [ ] **03b §4.7** — Clustering Gate subsection added
-- [ ] **03b §4.8** — Model Acceptance Gate subsection added
-- [ ] **03b §5.3** — Classification Gate code cell added
-- [ ] **03b §11** — Quality Assurance Summary Report cell added
-- [ ] **03c §8.8** — Timeseries Gate code cell added
+- [ ] **03a §1.5** — Risk Register markdown cell added (⚠️ NOT IMPLEMENTED — still pending)
+- [x] **03a §2.2** — Data Quality Gate code cell added
+- [x] **03a §3.2** — Feature Validation Gate code cell added
+- [x] **03b §4.7** — Clustering Gate subsection added
+- [x] **03b §4.8** — Model Acceptance Gate subsection added
+- [x] **03b §5.3** — Classification Gate code cell added
+- [x] **03b §11** — Quality Assurance Summary Report cell added
+- [x] **03c §7.6** — Timeseries Gate code cell added (fixed: data structure bug resolved)
 
 ### Test Suite
 
-- [ ] `TestCatBoostModel` removed from `test_model.py`
-- [ ] `pytest app/tests/ -v` passes
+- [x] `TestCatBoostModel` removed from `test_model.py`
+- [x] `pytest app/tests/ -v` passes
 
 ### Config & Environment
 
-- [ ] `pyproject.toml` created with black, flake8, pytest, coverage configs
-- [ ] `requirements.lock` generated from known-good install
-- [ ] CI install step falls back to `requirements.lock` when available
+- [x] `pyproject.toml` created with black, flake8, pytest, coverage configs
+- [ ] `requirements.lock` generated from known-good install (pending)
+- [x] CI install step falls back to `requirements.lock` when available
 
 ### CI/CD
 
-- [ ] `.github/workflows/ci.yml` active — test auto on push/PR
-- [ ] `.github/workflows/ci.yml` active — pytest on push/PR
-- [ ] Notebooks run locally via `papermill --log-output` (documented in AGENTS.md)
+- [x] `.github/workflows/ci.yml` active — test auto on push/PR
+- [x] `.github/workflows/ci.yml` active — pytest on push/PR
+- [x] Notebooks run locally via `papermill --log-output` (documented in AGENTS.md)
 
 ### Optional
 
-- [ ] `app/src/qa_report.py` created
+- [x] `app/src/qa_report.py` created
 
 ### Documentation
 
-- [ ] `docs/AUTOMATED_QA_TECH_SPEC.md` (this document)
-- [ ] `docs/IMPLEMENTATION_PROGRESS.md` updated with Q items marked complete
-- [ ] `AGENTS.md` updated with QA commands
+- [x] `docs/AUTOMATED_QA_TECH_SPEC.md` (this document)
+- [ ] `docs/IMPLEMENTATION_PROGRESS.md` updated with Q items marked complete (in progress)
+- [x] `AGENTS.md` updated with QA commands
 
 ---
 

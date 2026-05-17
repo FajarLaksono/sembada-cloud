@@ -841,33 +841,13 @@ shap_values = explainer.shap_values(X_test_sample)
 - Load **only those VMs' rows** at the parquet level — not the full dataset
 
 ```python
-cpu_shards = sorted(DATA_DIR.glob("cpu_readings/*.parquet"))
+from app.src.features import load_cpu_readings
 
-if cpu_shards:
-    # DuckDB glob → GROUP BY → discover top VMs (no full materialization)
-    cpu_vm_stats = con.execute("""
-        SELECT vm_id, COUNT(*) as count,
-               MIN(timestamp) as min_ts, MAX(timestamp) as max_ts,
-               (MAX(timestamp) - MIN(timestamp)) / 3600.0 AS duration_hours
-        FROM read_parquet('data/transformed/parquet/cpu_readings/*.parquet')
-        GROUP BY vm_id
-    """).fetchdf()
+cpu_traces = load_cpu_readings("data/transformed/parquet", max_vms=5)
 
-    top_n = min(5, len(cpu_vm_stats))
-    top_vms = cpu_vm_stats.nlargest(top_n, 'duration_hours')
-
-    # Load only the selected VMs' data (DuckDB filters at parquet level)
-    vm_ids_quoted = [f"'{v}'" for v in top_vms['vm_id'].tolist()]
-    cpu_traces = con.execute(f"""
-        SELECT vm_id, timestamp, avg_cpu
-        FROM read_parquet('data/transformed/parquet/cpu_readings/*.parquet')
-        WHERE vm_id IN ({', '.join(vm_ids_quoted)})
-        ORDER BY vm_id, timestamp
-    """).fetchdf()
-
-    # Build dict of VM ID → sorted timeseries
+if not cpu_traces.empty:
     vm_series_dict = {}
-    for vm_id in top_vms['vm_id']:
+    for vm_id in cpu_traces['vm_id'].unique():
         series = cpu_traces[cpu_traces['vm_id'] == vm_id].reset_index(drop=True)
         vm_series_dict[vm_id] = series['avg_cpu'].values
 ```
