@@ -189,7 +189,7 @@ def comparison_table(
         best_mask = pd.DataFrame(False, index=df.index, columns=df.columns)
         for col in df.columns:
             try:
-                if col.lower() in ['mae', 'rmse', 'mse']:
+                if col.lower() in ['mae', 'rmse', 'mse', 'wmape']:
                     best_idx = df[col].idxmin()
                 else:
                     best_idx = df[col].idxmax()

@@ -187,7 +187,7 @@ determines they are relevant.
 - **Location**: `.opencode/skills/model-evaluation/SKILL.md`
 - **Purpose**: Ensures models meet the project's Quality Assurance gates.
 - **Content**:
-  - Acceptance thresholds: MAPE <= 15%, R >= 0.70, F1 >= 0.85
+  - Acceptance thresholds: avg_cpu R² >= 0.70, cost MAPE <= 15%, F1 >= 0.85
   - Evaluation methodology: chronological train/test split (no leakage),
     regression + classification + clustering + timeseries tasks
   - Model comparison: comparison_table() with best-value highlighting

@@ -244,7 +244,7 @@ Auto-generated markdown table of contents for navigation.
 Markdown summary of:
 - Dataset used (Azure Public Dataset V2, 2.7M VMs)
 - Business goal: Predict resource waste, detect idle VMs, forecast CPU usage
-- Success criteria: MAPE < 15% for regression, F1 > 0.85 for classification
+- Success criteria: R² ≥ 0.7 for avg_cpu regression (MAPE unreliable for zero-inflated targets), MAPE < 15% for cost/waste regression, F1 > 0.85 for classification
 - Key finding preview
 
 ---
@@ -338,13 +338,28 @@ Note: CPU readings are NOT loaded here — they're handled separately in `03c_ti
 
 #### 3.1. Target Variable Definition
 
-| Task | Type | Target | Business Goal |
-|---|---|---|---|
-| Utilization regression | Regression | `avg_cpu` | Predict actual CPU usage |
-| Waste regression | Regression | `waste_fraction` = 1 - (avg_cpu / 100) | Quantify waste per VM |
-| Cost regression | Regression | `vm_cost` = rate_per_hour × lifetime | Forecast cloud spend |
-| Idle detection | Binary classification | `is_idle` = 1 if avg_cpu < 5% | Flag wasted VMs |
-| Waste tier | Multi-class | `waste_tier`: Low (<10%), Medium (10–50%), High (>50%) | Prioritize optimization |
+| Task | Type | Target | Business Goal | Why This Type |
+|---|---|---|---|---|---|
+| Utilization prediction | **Regression** | `avg_cpu` (0–100) | Rightsizing recommendations | Continuous numeric range; needs precise value for downsizing decisions |
+| Waste quantification | **Regression** | `waste_fraction` [0, 1] | Quantify waste per VM | Continuous proportion; needs exact percentage for cost calculation |
+| Cost forecasting | **Regression** | `vm_cost` ($) | Forecast cloud spend | Continuous dollar amount; needs monetary value for budget planning |
+| Idle detection | **Binary classification** | `is_idle` = avg_cpu < 5% | Flag wasted VMs | Clear binary threshold; yes/no action decision |
+| Waste tier triage | **Multi-class classification** | `waste_tier` (Low/Med/High) | Prioritize optimization | Ordinal categories; ranking drives intervention order |
+| Workload segmentation | **Clustering** (K-Means) | (unsupervised — no target) | Discover natural VM groups | No labels exist; unsupervised learning reveals hidden patterns |
+| Cost spike detection | **Anomaly detection** (Isolation Forest) | (unsupervised — no target) | Catch unusual cost patterns | Unknown unknowns; flags novel patterns labels would miss |
+
+#### 3.1.1. Modeling Strategy Overview
+
+The fundamental principle: **the measurement scale of each target variable — or its absence — determines the model family.**
+
+- **Continuous numeric targets** (avg_cpu, waste_fraction, vm_cost) → **Regression** — produce precise values for rightsizing, waste quantification, and cost forecasting.
+- **Binary threshold targets** (is_idle) → **Binary classification** — produce clear yes/no flags for operational actions (shut down idle VMs).
+- **Ordinal categorical targets** (waste_tier) → **Multi-class classification** — produce rank-ordered predictions for intervention triage.
+- **No target (unsupervised)** → **Clustering** or **Anomaly detection** — discover structure or flag outliers without ground truth.
+
+Within each family, specific algorithms (Ridge, Random Forest, XGBoost) are selected based on literature recommendations — see `docs/Recommended_models_from_literature.md`.
+
+All targets are constructed from `avg_cpu` in `app/src/features.py:create_features()`.
 
 #### 3.2. Feature Construction
 
@@ -496,11 +511,15 @@ features_df = pd.read_parquet(DATA_DIR / "features_df.parquet")
 
 #### 4.4. Model Evaluation Comparison
 
-| Model | MAE (avg_cpu) | RMSE (avg_cpu) | R² (avg_cpu) | MAPE | Training Time |
-|---|---|---|---|---|---|
+| Model | MAE (avg_cpu) | RMSE (avg_cpu) | R² (avg_cpu) | WMAPE (informational) | Training Time |
+|---|---|---|---|---|---|---|
 | Ridge | | | | | |
 | Random Forest | | | | | |
 | XGBoost | | | | | |
+
+**Note:** MAPE is omitted for avg_cpu evaluation — the target is zero-inflated
+(92.5% of VMs are near-idle), making percentage errors meaningless. WMAPE
+(Weighted MAPE) is reported as an informational alternative.
 
 **Output:** Side-by-side table with best values highlighted. Repeated for each target (`avg_cpu`, `waste_fraction`, `vm_cost`).
 
@@ -724,7 +743,7 @@ shap_values = explainer.shap_values(X_test_sample)
 
 | Task | Best Model | Metric 1 | Metric 2 | Metric 3 | Training Time |
 |---|---|---|---|---|---|
-| avg_cpu prediction | XGBoost | MAE: 2.3 | R²: 0.82 | MAPE: 12.4% | 45s |
+| avg_cpu prediction | XGBoost | MAE: 2.3 | R²: 0.82 | WMAPE: — | 45s |
 | waste_fraction prediction | Random Forest | MAE: 0.08 | R²: 0.79 | MAPE: 11.2% | 52s |
 | vm_cost prediction | Random Forest | MAE: $1.2 | R²: 0.71 | MAPE: 14.8% | 120s |
 | idle detection | XGBoost | F1: 0.94 | ROC-AUC: 0.97 | Precision: 0.93 | 38s |

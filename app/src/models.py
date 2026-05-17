@@ -87,6 +87,8 @@ class BaseModel(ABC):
             metrics['r2'] = r2_score(y, y_pred)
             metrics['mse'] = mean_squared_error(y, y_pred)
             metrics['mape'] = np.mean(np.abs((y - y_pred) / (y + 1e-6))) * 100
+            denom = np.sum(np.abs(y)) + 1e-6
+            metrics['wmape'] = np.sum(np.abs(y - y_pred)) / denom * 100
 
         elif task == "classification":
             metrics['accuracy'] = accuracy_score(y, y_pred)

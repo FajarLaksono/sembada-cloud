@@ -159,7 +159,7 @@ Build the main notebook sections: setup, feature engineering, and baseline model
 #### §1. Summary
 - [x] Business understanding section
 - [x] Dataset overview (Azure Public Dataset V2, 2.7M VMs)
-- [x] Success criteria (MAPE < 15%, F1 > 0.85)
+- [x] Success criteria (avg_cpu R² ≥ 0.7, cost MAPE < 15%, F1 > 0.85)
 - [x] Key finding preview
 
 **Dependencies:** None  

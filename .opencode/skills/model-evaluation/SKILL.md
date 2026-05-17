@@ -21,8 +21,10 @@ These are defined in `app/src/qa_report.py` — `SUCCESS_CRITERIA`:
 
 | Task | Metric | Threshold |
 |------|--------|-----------|
-| Regression | MAPE | <= 15.0% |
-| Regression | R^2 | >= 0.70 |
+| Regression (avg_cpu) | R² | >= 0.70 |
+| Regression (avg_cpu) | MAPE / WMAPE | informational — zero-inflated target (see tech spec §1.5) |
+| Regression (cost, waste) | MAPE | <= 15.0% |
+| Regression (cost, waste) | R² | >= 0.70 |
 | Classification | F1 | >= 0.85 |
 | Clustering | Silhouette score | >= 0.30 |
 | Time series | MAE | <= 5.0 |
