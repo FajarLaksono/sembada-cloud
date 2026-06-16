@@ -1,49 +1,124 @@
-# sembada-cloud
-Use Python 3.13.13
+# Sembada Cloud
 
-### What is CRISP-ML(Q)
-CRISP-ML(Q) stands for Cross-Industry Standard Process for Machine Learning with Quality Assurance methodology. It is a structured, iterative framework designed to guide the entire ML lifecycle, from business understanding to deployment and maintenance, while emphasizing risk management, model quality, and reliability.
+Cloud resource and cost prediction using machine learning and deep learning, following CRISP-ML(Q) and CAMS DevOps. Part of a master's thesis.
 
-Core Phases of CRISP-ML(Q): 
-1. Business and Data Understanding: Defines project objectives, translates business goals into ML goals, and assesses project feasibility.
-2. Data Engineering: Involves data collection, cleaning, normalization, and feature engineering, often utilizing data lakes, with a focus on data quality.
-3. ML Model Engineering: Focuses on algorithm selection, training, hyperparameter tuning, and, when applicable, transfer learning or ensemble methods.
-4. ML Model Evaluation: Validates model performance, ensures robustness, checks for fairness and interpretability, and evaluates against success criteria before deployment.
-5. Deployment: Releases the model into production systems, including planning for model updates and user adoption.
-6. Monitoring and Maintenance: Oversees the model's performance in real-world use, monitoring for data drift and maintaining the system to ensure long-term functionality.
+**Dataset:** [Azure Public Dataset V2](https://github.com/Azure/AzurePublicDataset/blob/master/AzurePublicDatasetV2.md) (2019 VM traces) — 2.7M VMs, 30-day trace. Chosen over Google Borg (1TB+, container scheduling, not VMs) and Alibaba ClusterData (12-day traces, too shallow for waste analysis).
 
-Key Quality Assurance Aspects:
-- Risk-Based Thinking: Identifying potential failure points early in the lifecycle.
-- Measurable Metrics: Defining clear technical and business metrics for success.
-- Iterative Process: Each phase can be revisited, and the model refined based on findings in later stages. 
+**Stack:** Python 3.13, scikit-learn, XGBoost, TensorFlow/Keras, DuckDB, SHAP.
 
-### What is CAMS DevOps
-CAMS is a foundational DevOps framework to define the core pillars of successful DevOps adoption: Culture, Automation, Measurement, and Sharing. It emphasizes balancing human-centric, collaborative processes with technical automation, often aimed at fostering a blameless, transparent, and high-velocity development environment.
+## Prediction Tasks & Models
 
-Core Pillars of CAMS:
-- Culture: Focuses on improving communication, collaboration, and removing silos between software developers and IT operations, often including blameless retrospection.
-- Automation: Aims to automate the entire software delivery pipeline—from testing to deployment—reducing manual intervention and speeding up development.
-- Measurement: Emphasizes collecting data on metrics related to people, processes, and technology to guide improvements.
-- Sharing: Fosters an open environment where knowledge, ideas, and problems are shared to facilitate team learning and collaborative problem-solving
+| Task | Target | Models |
+|------|--------|--------|
+| CPU/waste/cost regression | `avg_cpu`, `waste_fraction`, `vm_cost` | Ridge, Random Forest, XGBoost |
+| Idle VM detection | `is_idle` (binary) | Logistic Regression, RF, XGBoost |
+| Waste tier classification | `waste_tier` (Low/Med/High) | Random Forest, XGBoost |
+| Workload segmentation | — (clustering) | K-Means (K=4) |
+| Cost spike detection | — (anomaly) | Isolation Forest |
+| CPU timeseries forecasting | `avg_cpu` (1-step, 24-lag) | ARIMA, LSTM, BiGRU, CNN-LSTM |
 
-### How to Run
+## Quick Start
 
-1. Install dependencies:
+### 1. Install dependencies
+```bash
+pip install -r requirements.txt
+```
 
-`pip install -r requirements.txt`
+### 2. Download & prepare data
+Run notebooks in order:
+```bash
+# Download Azure dataset (vmtable, subscriptions, deployments, CPU readings)
+jupyter nbconvert --to notebook --execute notebooks/00_download_azure_v2_dataset.ipynb
 
-2. Authenticate with GCP:
+# Convert CSV to Parquet
+jupyter nbconvert --to notebook --execute notebooks/01_convert_to_parquet.ipynb
+```
 
-`gcloud auth application-default login`
+Expected data layout:
+```
+data/transformed/parquet/
+├── vmtable.parquet
+├── subscriptions.parquet
+├── deployments.parquet
+├── azure_pricing.parquet
+└── cpu_readings/
+    └── *.parquet
+```
 
-3. Set your project ID:
+### 3. Run tests
+```bash
+pytest app/tests/ -v --cov=app.src --cov-report=term
+```
 
-`set GCP_PROJECT_ID=your-gcp-project-id`
+### 4. Execute analysis notebooks
+```bash
+# 03a — Feature engineering
+papermill notebooks/03a_feature_engineering.ipynb output.ipynb --log-output --progress-bar --execution-timeout 600
 
-4. Run the script (quick test):
+# 03b — Tabular models (Ridge, RF, XGBoost, K-Means, Isolation Forest, SHAP)
+papermill notebooks/03b_tabular_models.ipynb output.ipynb --log-output --progress-bar --execution-timeout 600
 
-`python app/src/fetch_cluster_data.py`
+# 03c — Timeseries forecasting (ARIMA, LSTM, BiGRU, CNN-LSTM)
+papermill notebooks/03c_timeseries_forecasting.ipynb output.ipynb --log-output --progress-bar --execution-timeout 600
+```
 
-5. Or open the notebook:
+Or open interactively:
+```bash
+jupyter notebook notebooks/03a_feature_engineering.ipynb
+```
 
-`jupyter notebook notebooks/Google_ClusterData2019Traces.ipynb`
+### 5. QA compliance report
+```bash
+python -m app.src.qa_report
+```
+
+## Quality Gates
+
+Assertion cells embedded in notebooks. Execution exits with non-zero code on failure:
+
+| Gate | Notebook | Fails When |
+|------|----------|------------|
+| Data Quality | `03a §2.2` | Data empty, no unique VMs, missing columns |
+| Feature Validation | `03a §3.2` | Missing target/feature columns, invalid ranges |
+| Model Acceptance | `03b §4.8` | R² < 0.7 |
+| Classification Gate | `03b §5.3` | F1 < 0.80 |
+| Timeseries Gate | `03c §8.8` | MAE ≥ 5.0 |
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs `pytest` on every push/PR (synthetic fixtures, no real data needed due to limited resources of GithubCI). Notebook execution is local only (~100GB dataset).
+
+## Project Structure
+
+```
+sembada-cloud/
+├── notebooks/
+│   ├── 00_download_azure_v2_dataset.ipynb
+│   ├── 01_convert_to_parquet.ipynb
+│   ├── 02_azure_descriptive_analysis.ipynb
+│   ├── 03a_feature_engineering.ipynb
+│   ├── 03b_tabular_models.ipynb
+│   └── 03c_timeseries_forecasting.ipynb
+├── app/src/
+│   ├── features.py          — Feature engineering
+│   ├── models.py            — Model wrappers (fit/predict/evaluate/save)
+│   ├── visualize.py         — Publication-quality plots
+│   └── qa_report.py         — QA compliance report
+├── app/tests/
+│   ├── conftest.py          — Shared fixtures
+│   ├── test_features.py     — ~14 tests
+│   └── test_model.py        — ~12 tests
+├── models/                  — Saved model artifacts + run_log.csv
+├── .github/workflows/ci.yml
+├── requirements.txt
+└── docs/
+```
+
+## Linting
+
+```bash
+black --check app/src/ app/tests/ && flake8 app/src/
+black app/src/ app/tests/        # auto-format
+```
+
+See `docs/` for detailed methodology (Chapter 3), thesis sections, and technical specs.

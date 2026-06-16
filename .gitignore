@@ -10,6 +10,8 @@ ClusterData2019_docs
 
 # Data (staging parquet files, large)
 data/
+docs_personal/
+tools/
 
 # Models (large binary files)
 models/**/*.pkl
